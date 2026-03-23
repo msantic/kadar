@@ -48,4 +48,10 @@ contextBridge.exposeInMainWorld('optimizer', {
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
 
   setDockBadge: (text: string) => ipcRenderer.invoke('set-dock-badge', text),
+
+  // ─── Screenshot ───────────────────────────────────────────────────────────
+  getWindowId: (appName: string) => ipcRenderer.invoke('get-window-id', appName),
+
+  takeScreenshot: (p: { appName: string; outputDir: string; format: 'png' | 'webp'; shadow: boolean; trimPx: number; scale: number }) =>
+    ipcRenderer.invoke('take-screenshot', p),
 })

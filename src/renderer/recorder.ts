@@ -1,5 +1,7 @@
 // Record tab — window picker, resize, audio selection, screen capture, save to MP4
 
+import { SIZE_PRESETS, loadRunningApps, setupPresetChange, doResize, getSaveDir, setupSaveDir, el, show, hide, persist } from './shared'
+
 interface RecorderBridge {
   getRunningApps: () => Promise<string[]>
   resizeWindow: (p: { app: string; width: number; height: number; x?: number; y?: number }) => Promise<void>
@@ -12,13 +14,6 @@ interface RecorderBridge {
 }
 
 declare const window: Window & { optimizer: RecorderBridge }
-
-const SIZE_PRESETS: Record<string, { width: number; height: number; x: number; y: number }> = {
-  '1944x1100': { width: 1944, height: 1100, x: 100, y: 80 },
-  '1920x1080': { width: 1920, height: 1080, x: 0, y: 0 },
-  '1280x720': { width: 1280, height: 720, x: 0, y: 0 },
-  '2560x1440': { width: 2560, height: 1440, x: 0, y: 0 },
-}
 
 let mediaRecorder: MediaRecorder | null = null
 let recordedChunks: Blob[] = []
@@ -53,45 +48,39 @@ function cleanupRecordingResources(): void {
   recordedChunks = []
 }
 
-// ─── Show / hide helpers ──────────────────────────────────────────────────────
-
-function show(id: string): void {
-  document.getElementById(id)?.removeAttribute('hidden')
-}
-
-function hide(id: string): void {
-  document.getElementById(id)?.setAttribute('hidden', '')
-}
-
-function el<T extends HTMLElement>(id: string): T {
-  return document.getElementById(id) as T
-}
-
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 export async function initRecorder(): Promise<void> {
-  const stored = localStorage.getItem('recorder-save-dir')
-  if (stored) saveDir = stored
+  saveDir = getSaveDir('recorder-save-dir', '~/Movies/Recordings')
   el('save-dir').textContent = saveDir
 
-  await checkPermissions()
-  await loadRunningApps()
-  await loadAudioDevices()
+  // Persist form values
+  persist('size-preset')
+  persist('dim-w')
+  persist('dim-h')
+  persist('system-audio-toggle')
+  persist('normalize-audio-toggle')
+  persist('raw-output-toggle')
 
-  el('refresh-sources-btn').addEventListener('click', loadRunningApps)
+  await checkPermissions()
+  await loadRunningApps('window-select')
+  persist('window-select')
+  await loadAudioDevices()
+  persist('mic-select')
+
+  el('refresh-sources-btn').addEventListener('click', () => loadRunningApps('window-select'))
   el('perm-settings-btn').addEventListener('click', () => {
     window.optimizer.openExternal(
       'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
     )
   })
-  el('size-preset').addEventListener('change', onPresetChange)
-  el('resize-btn').addEventListener('click', onResizeClick)
-  el('choose-dir-btn').addEventListener('click', onChooseDir)
+  setupPresetChange('size-preset', 'dim-w', 'dim-h', 'dim-inputs', 'dim-ratio')
+  el('resize-btn').addEventListener('click', () =>
+    doResize('window-select', 'dim-w', 'dim-h', 'size-preset', 'resize-btn'))
+  setupSaveDir('save-dir', 'choose-dir-btn', 'recorder-save-dir', (dir) => { saveDir = dir })
   el('record-btn').addEventListener('click', startRecording)
   el('stop-btn').addEventListener('click', stopRecording)
   el('show-result-btn').addEventListener('click', onShowResult)
-
-  onPresetChange()
 }
 
 // ─── Permissions ──────────────────────────────────────────────────────────────
@@ -110,30 +99,6 @@ async function checkPermissions(): Promise<void> {
     show('perm-warning')
   } else {
     hide('perm-warning')
-  }
-}
-
-// ─── Running Apps (for resize picker) ────────────────────────────────────────
-
-async function loadRunningApps(): Promise<void> {
-  const select = el<HTMLSelectElement>('window-select')
-  select.innerHTML = '<option>Loading…</option>'
-  try {
-    const apps = await window.optimizer.getRunningApps()
-    select.innerHTML = ''
-    if (apps.length === 0) {
-      select.innerHTML = '<option disabled value="">No apps found</option>'
-      return
-    }
-    for (const appName of apps) {
-      const opt = document.createElement('option')
-      opt.value = appName
-      opt.textContent = appName
-      select.appendChild(opt)
-    }
-  } catch (err) {
-    console.error('getRunningApps failed:', err)
-    select.innerHTML = '<option disabled value="">Failed to list apps</option>'
   }
 }
 
@@ -175,73 +140,6 @@ async function loadAudioDevices(): Promise<void> {
     label.innerHTML =
       'Include system audio ' +
       '<a href="https://existential.audio/blackhole/" target="_blank" class="link">(install BlackHole)</a>'
-  }
-}
-
-// ─── Preset / Resize ─────────────────────────────────────────────────────────
-
-function onPresetChange(): void {
-  const presetSelect = el<HTMLSelectElement>('size-preset')
-  const dimInputs = el('dim-inputs')
-  const wInput = el<HTMLInputElement>('dim-w')
-  const hInput = el<HTMLInputElement>('dim-h')
-
-  const preset = SIZE_PRESETS[presetSelect.value]
-  if (preset) {
-    wInput.value = String(preset.width)
-    hInput.value = String(preset.height)
-    dimInputs.style.opacity = '0.5'
-    wInput.readOnly = true
-    hInput.readOnly = true
-  } else {
-    dimInputs.style.opacity = '1'
-    wInput.readOnly = false
-    hInput.readOnly = false
-  }
-}
-
-async function onResizeClick(): Promise<void> {
-  const windowSelect = el<HTMLSelectElement>('window-select')
-  const selectedOpt = windowSelect.selectedOptions[0]
-  if (!selectedOpt) return
-
-  const appName = selectedOpt.value || selectedOpt.textContent || ''
-  const wInput = el<HTMLInputElement>('dim-w')
-  const hInput = el<HTMLInputElement>('dim-h')
-  const presetSelect = el<HTMLSelectElement>('size-preset')
-  const preset = SIZE_PRESETS[presetSelect.value]
-
-  const width = parseInt(wInput.value, 10)
-  const height = parseInt(hInput.value, 10)
-  const x = preset?.x ?? 0
-  const y = preset?.y ?? 0
-
-  const btn = el<HTMLButtonElement>('resize-btn')
-  btn.textContent = 'Resizing…'
-  btn.disabled = true
-
-  try {
-    await window.optimizer.resizeWindow({ app: appName, width, height, x, y })
-    btn.textContent = 'Done ✓'
-    setTimeout(() => {
-      btn.textContent = 'Resize'
-      btn.disabled = false
-    }, 1500)
-  } catch (err) {
-    btn.textContent = 'Failed'
-    btn.disabled = false
-    console.error('resize-window failed:', err)
-  }
-}
-
-// ─── Save Directory ───────────────────────────────────────────────────────────
-
-async function onChooseDir(): Promise<void> {
-  const dir = await window.optimizer.chooseDirectory()
-  if (dir) {
-    saveDir = dir
-    localStorage.setItem('recorder-save-dir', dir)
-    el('save-dir').textContent = dir
   }
 }
 

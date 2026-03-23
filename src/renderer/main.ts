@@ -17,6 +17,9 @@ interface OptimizerAPI {
   getPermissions: () => Promise<Permissions>
   openExternal: (url: string) => Promise<void>
   setDockBadge: (text: string) => Promise<void>
+  // screenshot
+  getWindowId: (appName: string) => Promise<number>
+  takeScreenshot: (p: { appName: string; outputDir: string; format: 'png' | 'webp'; shadow: boolean; trimPx: number; scale: number }) => Promise<string>
 }
 
 interface ProgressData {
@@ -42,29 +45,55 @@ const items = new Map<string, QueueItem>()
 
 // ─── Tab Switching ────────────────────────────────────────────────────────────
 
-const panelOptimize = document.getElementById('panel-optimize')!
-const panelRecord   = document.getElementById('panel-record')!
-let recorderInited  = false
+const panelOptimize   = document.getElementById('panel-optimize')!
+const panelRecord     = document.getElementById('panel-record')!
+const panelScreenshot = document.getElementById('panel-screenshot')!
+let recorderInited    = false
+let screenshotInited  = false
+
+// Persist optimize panel values
+import { persist } from './shared'
+persist('max-width')
+persist('video-preset')
+
+async function switchTab(tab: string): Promise<void> {
+  document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'))
+  document.querySelector(`.tab-btn[data-tab="${tab}"]`)?.classList.add('active')
+
+  panelOptimize.hidden = true
+  panelRecord.hidden = true
+  panelScreenshot.hidden = true
+
+  if (tab === 'record') {
+    panelRecord.hidden = false
+    if (!recorderInited) {
+      const { initRecorder } = await import('./recorder')
+      await initRecorder()
+      recorderInited = true
+    }
+  } else if (tab === 'screenshot') {
+    panelScreenshot.hidden = false
+    if (!screenshotInited) {
+      const { initScreenshot } = await import('./screenshot')
+      await initScreenshot()
+      screenshotInited = true
+    }
+  } else {
+    panelOptimize.hidden = false
+  }
+
+  localStorage.setItem('persist:active-tab', tab)
+}
 
 document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach((btn) => {
-  btn.addEventListener('click', async () => {
-    document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'))
-    btn.classList.add('active')
-
-    if (btn.dataset['tab'] === 'record') {
-      panelOptimize.hidden = true
-      panelRecord.hidden = false
-      if (!recorderInited) {
-        const { initRecorder } = await import('./recorder')
-        await initRecorder()
-        recorderInited = true
-      }
-    } else {
-      panelRecord.hidden = true
-      panelOptimize.hidden = false
-    }
-  })
+  btn.addEventListener('click', () => switchTab(btn.dataset['tab'] ?? 'optimize'))
 })
+
+// Restore last active tab
+const savedTab = localStorage.getItem('persist:active-tab')
+if (savedTab && savedTab !== 'optimize') {
+  void switchTab(savedTab)
+}
 
 // ─── Drag & Drop ─────────────────────────────────────────────────────────────
 

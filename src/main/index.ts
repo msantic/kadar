@@ -1,9 +1,10 @@
-import { app, BrowserWindow, ipcMain, shell, desktopCapturer, dialog, systemPreferences } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog, systemPreferences, screen } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { execFile } from 'child_process'
 import { createRequire } from 'module'
 import fs from 'fs-extra'
+import sharp from 'sharp'
 import { optimizeImages } from './optimizer/image'
 import { optimizeVideo, type VideoPreset } from './optimizer/video'
 
@@ -255,3 +256,128 @@ ipcMain.handle('get-permissions', () => ({
 ipcMain.handle('set-dock-badge', (_e, text: string) => {
   app.dock.setBadge(text)
 })
+
+// ─── Screenshot IPC Handlers ────────────────────────────────────────────────
+
+/** Get the CGWindowID for the first layer-0 window of `appName` using Swift + CoreGraphics. */
+function getWindowId(appName: string): Promise<number> {
+  const escaped = appName.replace(/["\\]/g, '')
+  const swift = `
+import CoreGraphics
+let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+if let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] {
+    for w in list {
+        if (w["kCGWindowOwnerName"] as? String) == "${escaped}",
+           (w["kCGWindowLayer"] as? Int) == 0,
+           let wid = w["kCGWindowNumber"] as? Int {
+            print(wid)
+            exit(0)
+        }
+    }
+}
+print(-1)
+`
+  return new Promise<number>((resolve) => {
+    execFile('swift', ['-e', swift], (err, stdout) => {
+      if (err) { resolve(-1); return }
+      const id = parseInt(stdout.trim(), 10)
+      resolve(isNaN(id) ? -1 : id)
+    })
+  })
+}
+
+ipcMain.handle('get-window-id', async (_e, appName: string) => {
+  return getWindowId(appName)
+})
+
+ipcMain.handle(
+  'take-screenshot',
+  async (_e, { appName, outputDir, format, shadow, trimPx = 0, scale = 100 }: {
+    appName: string; outputDir: string; format: 'png' | 'webp'; shadow: boolean; trimPx?: number; scale?: number
+  }) => {
+    const expandedDir = outputDir.startsWith('~')
+      ? outputDir.replace('~', app.getPath('home'))
+      : outputDir
+    await fs.ensureDir(expandedDir)
+
+    const timestamp = Date.now()
+    const pngPath = path.join(expandedDir, `screenshot-${timestamp}.png`)
+
+    // Bring app to front
+    const activateScript = `tell application "${appName.replace(/["\\]/g, '')}" to activate`
+    await new Promise<void>((resolve) =>
+      execFile('osascript', ['-e', activateScript], () => resolve()),
+    )
+    // Brief delay for the app to come to front
+    await new Promise((r) => setTimeout(r, 300))
+
+    // Get CGWindowID via Swift + CoreGraphics
+    const windowId = await getWindowId(appName)
+
+    if (windowId < 0) {
+      throw new Error(`Could not find a window for "${appName}". Make sure the app is open and visible.`)
+    }
+
+    // Capture with screencapture CLI
+    const args = ['-l', String(windowId), '-x']
+    if (!shadow) args.push('-o')
+    args.push(pngPath)
+
+    await new Promise<void>((resolve, reject) => {
+      execFile('screencapture', args, (err) => {
+        if (err) reject(new Error(`screencapture failed: ${err.message}`))
+        else resolve()
+      })
+    })
+
+    if (!await fs.pathExists(pngPath)) {
+      throw new Error('Screenshot was not created. Screen Recording permission may be required.')
+    }
+
+    // Check for zero-byte file (permission issue)
+    const stat = await fs.stat(pngPath)
+    if (stat.size === 0) {
+      await fs.remove(pngPath)
+      throw new Error('Screenshot is empty. Grant Screen Recording permission in System Settings.')
+    }
+
+    // Trim border pixels from all edges (scale by Retina factor)
+    if (trimPx > 0) {
+      const meta = await sharp(pngPath).metadata()
+      const w = meta.width ?? 0
+      const h = meta.height ?? 0
+      const dpr = screen.getPrimaryDisplay().scaleFactor
+      const trim = Math.round(trimPx * dpr)
+      const cropW = w - trim * 2
+      const cropH = h - trim * 2
+      if (cropW > 0 && cropH > 0) {
+        const trimmed = await sharp(pngPath)
+          .extract({ left: trim, top: trim, width: cropW, height: cropH })
+          .toBuffer()
+        await fs.writeFile(pngPath, trimmed)
+      }
+    }
+
+    // Scale down if requested
+    if (scale > 0 && scale < 100) {
+      const meta = await sharp(pngPath).metadata()
+      const newW = Math.round((meta.width ?? 0) * scale / 100)
+      if (newW > 0) {
+        const scaled = await sharp(pngPath)
+          .resize(newW, undefined, { fit: 'inside' })
+          .toBuffer()
+        await fs.writeFile(pngPath, scaled)
+      }
+    }
+
+    // Convert to WebP if requested
+    if (format === 'webp') {
+      const webpPath = path.join(expandedDir, `screenshot-${timestamp}.webp`)
+      await sharp(pngPath).webp({ quality: 90 }).toFile(webpPath)
+      await fs.remove(pngPath)
+      return webpPath
+    }
+
+    return pngPath
+  },
+)
