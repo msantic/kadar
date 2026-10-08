@@ -110,12 +110,20 @@ export function createGrid(): GridHandle {
   // Finder-style keys in the grid: arrows, Home/End and Page Up/Down move the selection;
   // Space or Return opens it in the big view. The big view handles its own keys while open.
   window.addEventListener('keydown', (e) => {
-    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return
+    if (e.defaultPrevented || e.ctrlKey || e.altKey) return
     if (getState().lightboxIndex !== null || root.offsetParent === null || entries.length === 0) return
     const target = e.target as HTMLElement | null
     if (target && (target.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName))) return
 
     const current = selectedIndex()
+    // Cmd+O or Cmd+Down opens the file in its default app, as in Finder.
+    if (e.metaKey) {
+      if ((e.key === 'o' || e.key === 'ArrowDown') && current >= 0) {
+        e.preventDefault()
+        void window.viewer.fs.openDefault(entries[current]!.path)
+      }
+      return
+    }
     // With no selection yet, the first key selects the top-left image on screen.
     const from = current >= 0 ? current : topIndex
     const pageRows = Math.max(1, Math.floor(root.clientHeight / layout.rowHeight))
@@ -147,7 +155,7 @@ export function createGrid(): GridHandle {
     canvas.appendChild(cell.root)
     cell.root.addEventListener('click', (e) => handleClick(e, cell))
     cell.root.addEventListener('dblclick', () => {
-      if (cell.entry) void window.viewer.fs.openDefault(cell.entry.path)
+      if (cell.entry) emit('lightbox:open', { index: cell.index })
     })
     cell.root.addEventListener('contextmenu', (e) => {
       e.preventDefault()
@@ -162,8 +170,8 @@ export function createGrid(): GridHandle {
       void window.viewer.fs.revealInFinder(cell.entry.path)
       return
     }
-    setState({ selectedPath: cell.entry.path })
-    emit('lightbox:open', { index: cell.index })
+    // As in Finder: one click selects, a double-click opens.
+    select(cell.index)
   }
 
   function render(): void {
