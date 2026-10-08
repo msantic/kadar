@@ -328,3 +328,16 @@
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
+
+/* Sort control in the toolbar */
+.viewer-sort {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 2px 4px;
+}
+.viewer-sort-dir {
+  flex-shrink: 0;
+  font-size: 13px;
+  padding: 1px 6px;
+  margin-left: -6px;
+}

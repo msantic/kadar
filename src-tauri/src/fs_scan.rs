@@ -24,6 +24,7 @@ pub struct FileEntry {
     pub kind: Kind,
     pub size: u64,
     pub mtime_ms: f64,
+    pub created_ms: f64,
 }
 
 #[derive(Serialize)]
@@ -33,12 +34,15 @@ pub struct FolderListing {
     pub truncated: bool,
 }
 
-pub fn mtime_ms(meta: &fs::Metadata) -> f64 {
-    meta.modified()
-        .ok()
+fn ms(time: std::io::Result<std::time::SystemTime>) -> f64 {
+    time.ok()
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map(|d| d.as_secs_f64() * 1000.0)
         .unwrap_or(0.0)
+}
+
+pub fn mtime_ms(meta: &fs::Metadata) -> f64 {
+    ms(meta.modified())
 }
 
 pub fn list_folder(dir: &str) -> FolderListing {
@@ -70,6 +74,7 @@ pub fn list_folder(dir: &str) -> FolderListing {
                 kind,
                 size: meta.len(),
                 mtime_ms: mtime_ms(&meta),
+                created_ms: ms(meta.created()),
                 name,
                 path,
             });

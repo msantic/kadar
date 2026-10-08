@@ -12,6 +12,7 @@ export interface FileEntry {
   kind: Kind
   size: number
   mtimeMs: number
+  createdMs: number
 }
 
 export interface FolderListing {

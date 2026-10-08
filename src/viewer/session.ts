@@ -1,6 +1,8 @@
 // The viewer's last state, kept between launches: folder, place in the grid, selected image,
-// open big view and open sidebar folders. Stored in localStorage; every read and write is
-// guarded, so the viewer still works when storage is not available.
+// open big view, open sidebar folders and sort order. Stored in localStorage; every read and
+// write is guarded, so the viewer still works when storage is not available.
+
+import type { SortBy } from './sort'
 
 export interface ViewerSession {
   /** Folder shown in the grid. */
@@ -14,6 +16,9 @@ export interface ViewerSession {
   bigView: boolean
   /** Sidebar folders that were expanded. */
   expanded: string[]
+  /** Sort order of the grid, the same for every folder. */
+  sortBy: SortBy
+  sortDescending: boolean
 }
 
 const KEY = 'kadar:viewer-session'
@@ -26,6 +31,8 @@ const empty: ViewerSession = {
   selectedPath: null,
   bigView: false,
   expanded: [],
+  sortBy: 'name',
+  sortDescending: false,
 }
 
 function load(): ViewerSession {

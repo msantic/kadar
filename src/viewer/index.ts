@@ -1,6 +1,8 @@
 import { api } from './ipc'
 import { emit, on } from './bus'
 import { getSession, updateSession } from './session'
+import { defaultDescending, SORT_LABELS, sortEntries, type SortBy } from './sort'
+import type { FileEntry } from './types'
 import { getState, setState } from './store'
 import { createSidebar } from './sidebar/sidebar'
 import { createGrid } from './grid/grid'
@@ -60,7 +62,33 @@ export async function initViewer(): Promise<void> {
 
   sizeControl.append(sizeSmall, sizeSlider, sizeLarge)
 
-  toolbar.append(openBtn, pathEl, countEl, sizeControl)
+  // Sort: what to sort by, and a button for the direction.
+  const sortSelect = document.createElement('select')
+  sortSelect.className = 'viewer-sort'
+  sortSelect.title = 'Sort by'
+  for (const [value, label] of Object.entries(SORT_LABELS)) sortSelect.append(new Option(label, value))
+  sortSelect.value = getSession().sortBy
+  const sortDirBtn = document.createElement('button')
+  sortDirBtn.className = 'viewer-ghost-btn viewer-sort-dir'
+  const drawSortDir = (): void => {
+    const desc = getSession().sortDescending
+    sortDirBtn.textContent = desc ? '↓' : '↑'
+    sortDirBtn.title = desc ? 'Descending — click for ascending' : 'Ascending — click for descending'
+  }
+  drawSortDir()
+  sortSelect.addEventListener('change', () => {
+    const by = sortSelect.value as SortBy
+    updateSession({ sortBy: by, sortDescending: defaultDescending(by) })
+    drawSortDir()
+    resort()
+  })
+  sortDirBtn.addEventListener('click', () => {
+    updateSession({ sortDescending: !getSession().sortDescending })
+    drawSortDir()
+    resort()
+  })
+
+  toolbar.append(openBtn, pathEl, countEl, sortSelect, sortDirBtn, sizeControl)
 
   const grid = createGrid()
   const lightbox = createLightbox()
@@ -102,6 +130,23 @@ export async function initViewer(): Promise<void> {
     })
   }
 
+  const sorted = (list: FileEntry[]): FileEntry[] =>
+    sortEntries(list, getSession().sortBy, getSession().sortDescending)
+
+  /** New sort order: keep the selected image (or the top one) in view. */
+  function resort(): void {
+    const { entries, selectedPath } = getState()
+    if (entries.length === 0) return
+    const keep = selectedPath ?? getSession().topPath
+    const next = sorted(entries)
+    setState({ entries: next })
+    const index = keep ? next.findIndex((e) => e.path === keep) : -1
+    if (index >= 0) {
+      grid.scrollToIndex(index)
+      updateSession({ topIndex: index, topPath: next[index]!.path })
+    }
+  }
+
   async function loadFolder(dirPath: string): Promise<void> {
     setState({ currentFolder: dirPath, entries: [], folders: [], truncated: false, loading: true, selectedPath: null })
     pathEl.textContent = dirPath
@@ -109,7 +154,7 @@ export async function initViewer(): Promise<void> {
     const listing = await api.fs.listFolder(dirPath)
     if (getState().currentFolder !== dirPath) return
     setState({
-      entries: listing.files,
+      entries: sorted(listing.files),
       folders: listing.folders,
       truncated: listing.truncated,
       loading: false,
