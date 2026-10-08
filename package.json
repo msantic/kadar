@@ -4,6 +4,8 @@
   "description": "Image & video optimizer — CLI and desktop app",
   "main": "out/main/index.js",
   "scripts": {
+    "app:dev": "cd app && tauri dev",
+    "app:build": "cd app && tauri build",
     "dev": "env -u ELECTRON_RUN_AS_NODE electron-vite dev",
     "build": "env -u ELECTRON_RUN_AS_NODE electron-vite build && electron-builder --mac",
     "build:win": "env -u ELECTRON_RUN_AS_NODE electron-vite build && electron-builder --win --x64",
@@ -23,6 +25,8 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.1",
+    "@tauri-apps/api": "^2.12.1",
+    "@tauri-apps/cli": "^2.12.1",
     "@types/fluent-ffmpeg": "^2.1.28",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^25.3.0",

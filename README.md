@@ -4,7 +4,18 @@ Fast image viewer and image/video optimizer for macOS.
 
 The app is moving from Electron to Rust (Tauri), Mac only. The Electron version below still works until the Rust version replaces it.
 
-## Desktop App
+## Rust App (new)
+
+```bash
+npm run app:dev     # run with live reload
+npm run app:build   # build Kadar.app and the .dmg (about 4 MB / 2 MB)
+```
+
+Lives in `app/`. Today it has the viewer only. The Rust side (`app/src-tauri`) uses the Mac's own frameworks: ImageIO for thumbnails and image sizes, AVFoundation for video frames. The page reuses the viewer screens in `src/renderer/viewer` through a small bridge (`app/bridge.ts`), so both apps share the same screen code during the move.
+
+Output goes to `app/src-tauri/target/release/bundle/`.
+
+## Electron App (old)
 
 ```bash
 npm install

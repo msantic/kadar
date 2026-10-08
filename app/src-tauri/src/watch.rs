@@ -1,0 +1,52 @@
+//! Watches the open folder and tells the page when its contents change.
+
+use std::path::Path;
+use std::sync::mpsc::{self, RecvTimeoutError};
+use std::sync::Mutex;
+use std::thread;
+use std::time::Duration;
+
+use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use serde_json::json;
+use tauri::{AppHandle, Emitter};
+
+/// Changes closer together than this are reported once.
+const QUIET: Duration = Duration::from_millis(200);
+
+#[derive(Default)]
+pub struct FolderWatch(Mutex<Option<RecommendedWatcher>>);
+
+impl FolderWatch {
+    pub fn watch(&self, app: AppHandle, dir: String) {
+        self.unwatch();
+        let (tx, rx) = mpsc::channel::<()>();
+        let Ok(mut watcher) = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+            if res.is_ok() {
+                let _ = tx.send(());
+            }
+        }) else {
+            return;
+        };
+        if watcher.watch(Path::new(&dir), RecursiveMode::NonRecursive).is_err() {
+            return;
+        }
+        // Ends when the watcher is dropped, because that closes the sending side.
+        thread::spawn(move || {
+            while rx.recv().is_ok() {
+                loop {
+                    match rx.recv_timeout(QUIET) {
+                        Ok(()) => continue,
+                        Err(RecvTimeoutError::Timeout) => break,
+                        Err(RecvTimeoutError::Disconnected) => return,
+                    }
+                }
+                let _ = app.emit("viewer:fs:changed", json!({ "dirPath": dir }));
+            }
+        });
+        *self.0.lock().unwrap() = Some(watcher);
+    }
+
+    pub fn unwatch(&self) {
+        self.0.lock().unwrap().take();
+    }
+}

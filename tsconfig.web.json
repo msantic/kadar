@@ -8,5 +8,6 @@
     "strict": true,
     "skipLibCheck": true
   },
-  "include": ["src/renderer/**/*.ts"]
+  "include": ["src/renderer/**/*.ts", "app/**/*.ts"],
+  "exclude": ["app/vite.config.ts", "app/dist", "app/src-tauri"]
 }
