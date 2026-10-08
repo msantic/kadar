@@ -11,6 +11,7 @@ use crate::favorites::{Favorite, Favorites};
 use crate::formats::{kind_of, Kind};
 use crate::fs_scan::{self, FolderEntry, FolderListing};
 use crate::macos;
+use crate::optimize;
 use crate::thumbs::{FileInfo, RequestResult, ThumbService};
 use crate::watch::FolderWatch;
 
@@ -152,4 +153,21 @@ pub fn fav_remove(favs: State<'_, Favorites>, id: String) {
 #[tauri::command]
 pub fn fav_rename(favs: State<'_, Favorites>, id: String, label: String) -> Option<Favorite> {
     favs.rename(&id, label)
+}
+
+/// Dropped files and folders → the files the optimizer will process, in order.
+#[tauri::command(async)]
+pub fn optimize_expand(paths: Vec<String>) -> Vec<String> {
+    optimize::expand(&paths)
+}
+
+/// Optimizes `files`, reporting each step as a "file-progress" event. Returns when all are done.
+#[tauri::command(async)]
+pub fn optimize_files(app: AppHandle, files: Vec<String>, options: optimize::Options) {
+    optimize::run(&app, files, &options);
+}
+
+#[tauri::command]
+pub fn open_in_finder(path: String) {
+    let _ = Command::new("open").arg(path).spawn();
 }

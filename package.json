@@ -4,8 +4,8 @@
   "description": "Image & video optimizer — CLI and desktop app",
   "main": "out/main/index.js",
   "scripts": {
-    "app:dev": "cd app && PATH=\"$HOME/.cargo/bin:$PATH\" tauri dev",
-    "app:build": "cd app && PATH=\"$HOME/.cargo/bin:$PATH\" tauri build",
+    "app:dev": "app/scripts/build-ffmpeg.sh && cd app && PATH=\"$HOME/.cargo/bin:$PATH\" tauri dev",
+    "app:build": "app/scripts/build-ffmpeg.sh && cd app && PATH=\"$HOME/.cargo/bin:$PATH\" tauri build",
     "dev": "env -u ELECTRON_RUN_AS_NODE electron-vite dev",
     "build": "env -u ELECTRON_RUN_AS_NODE electron-vite build && electron-builder --mac",
     "build:win": "env -u ELECTRON_RUN_AS_NODE electron-vite build && electron-builder --win --x64",

@@ -3,8 +3,10 @@ mod favorites;
 mod formats;
 mod fs_scan;
 mod macos;
+mod optimize;
 mod protocol;
 mod thumbs;
+mod video;
 mod watch;
 
 use tauri::Manager;
@@ -40,6 +42,9 @@ pub fn run() {
             commands::fav_add,
             commands::fav_remove,
             commands::fav_rename,
+            commands::optimize_expand,
+            commands::optimize_files,
+            commands::open_in_finder,
         ])
         .run(tauri::generate_context!())
         .expect("Kadar failed to start");

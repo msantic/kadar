@@ -8,10 +8,12 @@ The app is moving from Electron to Rust (Tauri), Mac only. The Electron version 
 
 ```bash
 npm run app:dev     # run with live reload
-npm run app:build   # build Kadar.app and the .dmg (about 4 MB / 2 MB)
+npm run app:build   # build Kadar.app and the .dmg (about 15 MB / 6 MB)
 ```
 
-Lives in `app/`. Today it has the viewer only. The Rust side (`app/src-tauri`) uses the Mac's own frameworks: ImageIO for thumbnails and image sizes, AVFoundation for video frames. The page reuses the viewer screens in `src/renderer/viewer` through a small bridge (`app/bridge.ts`), so both apps share the same screen code during the move.
+Lives in `app/`. Today it has the Viewer and Optimize tabs. The Rust side (`app/src-tauri`) uses the Mac's own frameworks: ImageIO to decode and scale images, AVFoundation for video thumbnails. Images are encoded with libwebp, mozjpeg and oxipng, in parallel on all cores.
+
+Video uses a small ffmpeg (8 MB, H.264 + AAC only) built once by `app/scripts/build-ffmpeg.sh`; the npm scripts run it automatically. The Mac's own H.264 encoder was tested and made visibly worse video at the same file size. The page reuses the viewer screens in `src/renderer/viewer` through a small bridge (`app/bridge.ts`), so both apps share the same screen code during the move.
 
 Output goes to `app/src-tauri/target/release/bundle/`.
 

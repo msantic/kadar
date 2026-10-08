@@ -9,7 +9,11 @@ use objc2_av_foundation::{AVAsset, AVAssetImageGenerator};
 use objc2_core_foundation::{
     CFBoolean, CFDictionary, CFNumber, CFRetained, CFString, CFType, CFURL, CGSize,
 };
-use objc2_core_graphics::{CGImage, CGImageAlphaInfo};
+use objc2_core_foundation::{CGPoint, CGRect};
+use objc2_core_graphics::{
+    kCGColorSpaceSRGB, CGBitmapContextCreate, CGColorSpace, CGContext, CGImage, CGImageAlphaInfo,
+    CGInterpolationQuality,
+};
 use objc2_core_media::CMTime;
 use objc2_foundation::{NSString, NSURL};
 use objc2_image_io::{
@@ -27,7 +31,7 @@ pub enum Frame {
 }
 
 impl Frame {
-    fn image(&self) -> &CGImage {
+    pub fn image(&self) -> &CGImage {
         match self {
             Frame::Cf(i) => i,
             Frame::Objc(i) => i,
@@ -142,4 +146,65 @@ pub fn video_duration_ms(path: &Path) -> Option<f64> {
         let d = AVAsset::assetWithURL(&url).duration();
         (d.timescale > 0).then(|| d.value as f64 * 1000.0 / d.timescale as f64)
     })
+}
+
+/// Pixels in sRGB, 8 bits per channel, RGBA with straight (not premultiplied) alpha.
+pub struct Rgba {
+    pub width: u32,
+    pub height: u32,
+    pub data: Vec<u8>,
+    pub opaque: bool,
+}
+
+/// Decodes `frame` into sRGB RGBA. Wide-gamut photos (Display P3) are converted to sRGB,
+/// which is what browsers assume for images without a color profile.
+pub fn to_rgba(frame: &Frame) -> Result<Rgba, String> {
+    let image = frame.image();
+    let (w, h) = (CGImage::width(Some(image)), CGImage::height(Some(image)));
+    let mut data = vec![0u8; w * h * 4];
+    let space = CGColorSpace::with_name(Some(unsafe { kCGColorSpaceSRGB })).ok_or("no sRGB")?;
+    let ctx = unsafe {
+        CGBitmapContextCreate(
+            data.as_mut_ptr().cast(),
+            w,
+            h,
+            8,
+            w * 4,
+            Some(&space),
+            CGImageAlphaInfo::PremultipliedLast.0,
+        )
+    }
+    .ok_or("cannot create bitmap")?;
+    CGContext::set_interpolation_quality(Some(&ctx), CGInterpolationQuality::High);
+    let rect = CGRect { origin: CGPoint { x: 0.0, y: 0.0 }, size: CGSize { width: w as f64, height: h as f64 } };
+    CGContext::draw_image(Some(&ctx), rect, Some(image));
+    drop(ctx);
+
+    // The Mac draws premultiplied alpha; encoders expect straight alpha.
+    let mut opaque = true;
+    for px in data.chunks_exact_mut(4) {
+        let a = px[3] as u32;
+        if a == 255 {
+            continue;
+        }
+        opaque = false;
+        if a > 0 {
+            for c in &mut px[..3] {
+                *c = ((*c as u32 * 255 + a / 2) / a).min(255) as u8;
+            }
+        }
+    }
+    Ok(Rgba { width: w as u32, height: h as u32, data, opaque })
+}
+
+/// Full image, EXIF rotation applied, scaled down so its width is at most `max_width`.
+pub fn decode_for_web(path: &Path, max_width: u32) -> Result<Rgba, String> {
+    let (w, h) = image_size(path).ok_or("cannot read image")?;
+    let long = w.max(h);
+    let long = if w > max_width {
+        ((long as f64) * (max_width as f64) / (w as f64)).round() as u32
+    } else {
+        long
+    };
+    to_rgba(&image_thumbnail(path, long)?)
 }

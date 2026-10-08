@@ -6,9 +6,75 @@
   <title>Kadar</title>
 </head>
 <body>
-  <div class="titlebar kadar-titlebar" data-tauri-drag-region></div>
+  <div class="titlebar" data-tauri-drag-region>
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="viewer">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Viewer
+      </button>
+      <button class="tab-btn" data-tab="optimize">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Optimize
+      </button>
+    </div>
+  </div>
+
   <main>
     <div id="panel-viewer"></div>
+
+    <div id="panel-optimize" hidden>
+      <div id="drop-zone" class="drop-zone">
+        <div class="drop-icon">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <p class="drop-label">Drop files or folders to optimize</p>
+        <p class="drop-sub" id="drop-sub"></p>
+      </div>
+
+      <div class="options-bar">
+        <label class="option-label">
+          <span>Format</span>
+          <select id="image-format">
+            <option value="webp" selected>WebP</option>
+            <option value="png">PNG</option>
+            <option value="jpg">JPG</option>
+          </select>
+        </label>
+        <div class="option-divider"></div>
+        <label class="option-label">
+          <span>Max width</span>
+          <select id="max-width">
+            <option value="2400">2400px</option>
+            <option value="1600" selected>1600px</option>
+            <option value="1200">1200px</option>
+            <option value="800">800px</option>
+          </select>
+        </label>
+        <div class="option-divider"></div>
+        <label class="option-label">
+          <span>Video</span>
+          <select id="video-preset">
+            <option value="same">Original</option>
+            <option value="1080p">1080p</option>
+            <option value="720p" selected>720p</option>
+            <option value="480p">480p</option>
+          </select>
+        </label>
+      </div>
+
+      <div id="queue" class="queue" hidden>
+        <div class="queue-header">
+          <span id="queue-summary"></span>
+          <button id="clear-btn">Clear</button>
+        </div>
+        <ul id="file-list"></ul>
+      </div>
+    </div>
   </main>
   <script type="module" src="./main.ts"></script>
 </body>
