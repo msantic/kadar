@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Tauri merges these keys into the app's Info.plist. macOS shows the texts in its permission prompts. -->
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Kadar resizes the window you pick before it takes a screenshot or recording.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Kadar records your microphone when you turn it on for a screen recording.</string>
+</dict>
+</plist>

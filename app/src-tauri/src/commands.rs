@@ -7,6 +7,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
+use crate::capture;
 use crate::favorites::{Favorite, Favorites};
 use crate::formats::{kind_of, Kind};
 use crate::fs_scan::{self, FolderEntry, FolderListing};
@@ -170,4 +171,34 @@ pub fn optimize_files(app: AppHandle, files: Vec<String>, options: optimize::Opt
 #[tauri::command]
 pub fn open_in_finder(path: String) {
     let _ = Command::new("open").arg(path).spawn();
+}
+
+/// Opens a web page or a System Settings pane. Other schemes are refused.
+#[tauri::command]
+pub fn open_external(url: String) -> Result<(), String> {
+    let allowed = ["https://", "http://", "x-apple.systempreferences:"];
+    if !allowed.iter().any(|p| url.starts_with(p)) {
+        return Err("refused".into());
+    }
+    Command::new("open").arg(url).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+#[tauri::command(async)]
+pub fn capture_running_apps() -> Vec<String> {
+    capture::running_apps()
+}
+
+#[tauri::command]
+pub fn capture_permissions() -> capture::Permissions {
+    capture::permissions()
+}
+
+#[tauri::command(async)]
+pub fn capture_resize_window(app: String, width: i32, height: i32, x: Option<i32>, y: Option<i32>) -> Result<(), String> {
+    capture::resize_window(&app, width, height, x.unwrap_or(0), y.unwrap_or(0))
+}
+
+#[tauri::command(async)]
+pub fn capture_take(options: capture::ShotOptions) -> Result<String, String> {
+    capture::take(&options)
 }

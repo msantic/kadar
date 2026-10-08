@@ -160,7 +160,11 @@ pub struct Rgba {
 /// which is what browsers assume for images without a color profile.
 pub fn to_rgba(frame: &Frame) -> Result<Rgba, String> {
     let image = frame.image();
-    let (w, h) = (CGImage::width(Some(image)), CGImage::height(Some(image)));
+    render_rgba(image, CGImage::width(Some(image)), CGImage::height(Some(image)))
+}
+
+/// Draws `image` into a `w` × `h` sRGB RGBA buffer, scaling with high quality when sizes differ.
+pub fn render_rgba(image: &CGImage, w: usize, h: usize) -> Result<Rgba, String> {
     let mut data = vec![0u8; w * h * 4];
     let space = CGColorSpace::with_name(Some(unsafe { kCGColorSpaceSRGB })).ok_or("no sRGB")?;
     let ctx = unsafe {
@@ -195,6 +199,12 @@ pub fn to_rgba(frame: &Frame) -> Result<Rgba, String> {
         }
     }
     Ok(Rgba { width: w as u32, height: h as u32, data, opaque })
+}
+
+/// Cuts `rect` (in pixels, from the top-left) out of `frame`.
+pub fn crop(frame: &Frame, x: f64, y: f64, w: f64, h: f64) -> Option<Frame> {
+    let rect = CGRect { origin: CGPoint { x, y }, size: CGSize { width: w, height: h } };
+    CGImage::with_image_in_rect(Some(frame.image()), rect).map(Frame::Cf)
 }
 
 /// Full image, EXIF rotation applied, scaled down so its width is at most `max_width`.

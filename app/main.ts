@@ -1,17 +1,20 @@
 // Kadar window: Viewer and Optimize tabs, running on the Rust backend.
 
 import '../src/renderer/style.css'
-import { installViewerBridge } from './bridge'
+import { installCaptureBridge, installViewerBridge } from './bridge'
 import { initOptimize } from './optimize'
 
 installViewerBridge()
+installCaptureBridge()
 
 const panels: Record<string, HTMLElement> = {
   viewer: document.getElementById('panel-viewer')!,
   optimize: document.getElementById('panel-optimize')!,
+  screenshot: document.getElementById('panel-screenshot')!,
 }
 let activeTab = 'viewer'
 let viewerStarted = false
+let screenshotStarted = false
 
 function switchTab(tab: string): void {
   if (!(tab in panels)) tab = 'viewer'
@@ -26,6 +29,10 @@ function switchTab(tab: string): void {
   if (tab === 'viewer' && !viewerStarted) {
     viewerStarted = true
     void import('../src/renderer/viewer').then(({ initViewer }) => initViewer())
+  }
+  if (tab === 'screenshot' && !screenshotStarted) {
+    screenshotStarted = true
+    void import('../src/renderer/screenshot').then(({ initScreenshot }) => initScreenshot())
   }
 }
 

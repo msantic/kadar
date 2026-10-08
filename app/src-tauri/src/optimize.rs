@@ -175,9 +175,9 @@ fn run_one(
 pub fn optimize_image(src: &Path, dest: &Path, opts: &Options) -> Result<(), String> {
     let img = macos::decode_for_web(src, opts.max_width)?;
     let bytes = match opts.image_format {
-        ImageFormat::Webp => encode_webp(&img),
+        ImageFormat::Webp => encode_webp(&img, 80.0),
         ImageFormat::Jpg => encode_jpeg(&img)?,
-        ImageFormat::Png => encode_png(img)?,
+        ImageFormat::Png => encode_png(img, 2)?,
     };
     if let Some(dir) = dest.parent() {
         fs::create_dir_all(dir).map_err(|e| e.to_string())?;
@@ -188,12 +188,12 @@ pub fn optimize_image(src: &Path, dest: &Path, opts: &Options) -> Result<(), Str
     fs::rename(&tmp, dest).map_err(|e| e.to_string())
 }
 
-fn encode_webp(img: &macos::Rgba) -> Vec<u8> {
+pub fn encode_webp(img: &macos::Rgba, quality: f32) -> Vec<u8> {
     if img.opaque {
         let rgb = to_rgb(img);
-        webp::Encoder::from_rgb(&rgb, img.width, img.height).encode(80.0).to_vec()
+        webp::Encoder::from_rgb(&rgb, img.width, img.height).encode(quality).to_vec()
     } else {
-        webp::Encoder::from_rgba(&img.data, img.width, img.height).encode(80.0).to_vec()
+        webp::Encoder::from_rgba(&img.data, img.width, img.height).encode(quality).to_vec()
     }
 }
 
@@ -213,10 +213,11 @@ fn encode_jpeg(img: &macos::Rgba) -> Result<Vec<u8>, String> {
 }
 
 /// Lossless: PNG is picked for transparency or crisp UI art, where lossy compression shows.
-fn encode_png(img: macos::Rgba) -> Result<Vec<u8>, String> {
+/// `level` 0–6: higher is smaller and slower. 2 suits batch work, 1 suits a waiting user.
+pub fn encode_png(img: macos::Rgba, level: u8) -> Result<Vec<u8>, String> {
     let raw = oxipng::RawImage::new(img.width, img.height, oxipng::ColorType::RGBA, oxipng::BitDepth::Eight, img.data)
         .map_err(|e| e.to_string())?;
-    raw.create_optimized_png(&oxipng::Options::from_preset(2)).map_err(|e| e.to_string())
+    raw.create_optimized_png(&oxipng::Options::from_preset(level)).map_err(|e| e.to_string())
 }
 
 /// Drops alpha. Transparent areas become white, the usual page background.

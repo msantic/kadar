@@ -51,3 +51,27 @@ export function installViewerBridge(): void {
   }
   window.viewer = api
 }
+
+// The Screenshot screen (shared with the Electron app) calls `window.optimizer`.
+interface CaptureAPI {
+  getRunningApps: () => Promise<string[]>
+  resizeWindow: (p: { app: string; width: number; height: number; x?: number; y?: number }) => Promise<void>
+  chooseDirectory: () => Promise<string | null>
+  getPermissions: () => Promise<{ screen: string; microphone: string }>
+  openInFinder: (dirPath: string) => Promise<void>
+  openExternal: (url: string) => Promise<void>
+  takeScreenshot: (p: { appName: string; outputDir: string; format: 'png' | 'webp'; shadow: boolean; trimPx: number; scale: number }) => Promise<string>
+}
+
+export function installCaptureBridge(): void {
+  const api: CaptureAPI = {
+    getRunningApps:  () => invoke('capture_running_apps'),
+    resizeWindow:    (p) => invoke('capture_resize_window', p),
+    chooseDirectory: () => invoke('choose_folder'),
+    getPermissions:  () => invoke('capture_permissions'),
+    openInFinder:    (path) => invoke('open_in_finder', { path }),
+    openExternal:    (url) => invoke('open_external', { url }),
+    takeScreenshot:  (options) => invoke('capture_take', { options }),
+  }
+  ;(window as unknown as { optimizer: CaptureAPI }).optimizer = api
+}
