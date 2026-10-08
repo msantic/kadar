@@ -1,6 +1,8 @@
-# Image & Video Optimizer
+# Kadar
 
-Electron desktop app + CLI for batch image/video optimization and screen capture.
+Fast image viewer and image/video optimizer for macOS.
+
+The app is moving from Electron to Rust (Tauri), Mac only. The Electron version below still works until the Rust version replaces it.
 
 ## Desktop App
 
