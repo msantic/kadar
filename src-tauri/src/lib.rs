@@ -11,11 +11,18 @@ mod thumbs;
 mod video;
 mod watch;
 
-use tauri::Manager;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
+
+use tauri::{AppHandle, Manager, WindowEvent};
+use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // Reopens the window at its last size and place.
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         // Serves local files to the page as viewer-file://viewer/<absolute path>.
         .register_asynchronous_uri_scheme_protocol("viewer-file", protocol::handle)
         .setup(|app| {
@@ -27,6 +34,7 @@ pub fn run() {
             app.manage(favorites::Favorites::new(data_dir.join("viewer-favorites.json")));
             app.manage(watch::FolderWatch::default());
             app.manage(recorder::Recorder::default());
+            save_window_state_on_change(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -60,4 +68,25 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("Kadar failed to start");
+}
+
+/// The window-state add-on saves only on a normal quit. Also save half a second after each move
+/// or resize, so a crash or a forced quit keeps the window where it was.
+fn save_window_state_on_change(app: &AppHandle) {
+    let Some(window) = app.get_webview_window("main") else { return };
+    let generation = Arc::new(AtomicU64::new(0));
+    let app = app.clone();
+    window.on_window_event(move |event| {
+        if !matches!(event, WindowEvent::Moved(_) | WindowEvent::Resized(_)) {
+            return;
+        }
+        let mine = generation.fetch_add(1, Ordering::SeqCst) + 1;
+        let (generation, app) = (generation.clone(), app.clone());
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(500));
+            if generation.load(Ordering::SeqCst) == mine {
+                let _ = app.save_window_state(StateFlags::all());
+            }
+        });
+    });
 }

@@ -1,7 +1,8 @@
 import { computeLayout, totalHeight, ZOOM_DEFAULT, type GridLayout } from './grid-layout'
 import { createCell, assignCell, setCellThumb, positionCell, type CellHandle } from './grid-cell'
 import { ThumbLoader } from './thumb-loader'
-import { subscribe, getState } from '../store'
+import { subscribe, getState, setState } from '../store'
+import { updateSession } from '../session'
 import { emit } from '../bus'
 import type { FileEntry } from '../types'
 
@@ -10,6 +11,8 @@ const OVERSCAN_ROWS = 2
 export interface GridHandle {
   root: HTMLElement
   setZoom: (targetCell: number) => void
+  /** Scrolls so the row with this image is at the top, and keeps it there on resize and zoom. */
+  scrollToIndex: (index: number) => void
   dispose: () => void
 }
 
@@ -31,6 +34,10 @@ export function createGrid(): GridHandle {
   let layout: GridLayout = computeLayout(800, zoom)
   const cellPool: CellHandle[] = []
   const indexToCell = new Map<number, CellHandle>()
+  // The first image of the top row. Resizing and zooming keep this image at the top.
+  let topIndex = 0
+  // scrollTop we set ourselves; the scroll event it causes must not move topIndex.
+  let ownScrollTop: number | null = null
 
   const loader = new ThumbLoader((srcPath, cachePath) => {
     for (const cell of indexToCell.values()) {
@@ -38,14 +45,55 @@ export function createGrid(): GridHandle {
     }
   })
 
-  const ro = new ResizeObserver(() => {
-    layout = computeLayout(root.clientWidth, zoom)
-    canvas.style.height = `${totalHeight(entries.length, layout)}px`
-    fullRerender()
-  })
+  const ro = new ResizeObserver(() => relayout())
   ro.observe(root)
 
-  root.addEventListener('scroll', () => render(), { passive: true })
+  root.addEventListener('scroll', () => {
+    if (ownScrollTop !== null && Math.abs(root.scrollTop - ownScrollTop) < 1) {
+      ownScrollTop = null
+    } else {
+      ownScrollTop = null
+      topIndex = Math.floor(root.scrollTop / layout.rowHeight) * layout.columns
+      updateSession({ topIndex, topPath: entries[topIndex]?.path ?? null })
+    }
+    render()
+  }, { passive: true })
+
+  function relayout(): void {
+    layout = computeLayout(root.clientWidth, zoom)
+    canvas.style.height = `${totalHeight(entries.length, layout)}px`
+    scrollToTop()
+    fullRerender()
+  }
+
+  /** Puts the row that holds topIndex at the top of the view. */
+  function scrollToTop(): void {
+    const top = Math.floor(topIndex / layout.columns) * layout.rowHeight
+    if (Math.abs(root.scrollTop - top) >= 1) {
+      ownScrollTop = top
+      root.scrollTop = top
+    }
+  }
+
+  function markSelected(cell: CellHandle): void {
+    const selected = getState().selectedPath
+    cell.root.classList.toggle('selected', !!cell.entry && cell.entry.path === selected)
+  }
+
+  /** After the big view closes, show the image it ended on if it is off screen. */
+  function revealSelected(): void {
+    const selected = getState().selectedPath
+    const index = selected ? entries.findIndex((e) => e.path === selected) : -1
+    if (index < 0) return
+    const rowTop = Math.floor(index / layout.columns) * layout.rowHeight
+    const visible = rowTop >= root.scrollTop && rowTop + layout.rowHeight <= root.scrollTop + root.clientHeight
+    if (!visible) {
+      topIndex = Math.floor(index / layout.columns) * layout.columns
+      scrollToTop()
+      updateSession({ topIndex, topPath: entries[topIndex]?.path ?? null })
+      render()
+    }
+  }
 
   function recycleCell(): CellHandle {
     const cell = createCell()
@@ -68,6 +116,7 @@ export function createGrid(): GridHandle {
       void window.viewer.fs.revealInFinder(cell.entry.path)
       return
     }
+    setState({ selectedPath: cell.entry.path })
     emit('lightbox:open', { index: cell.index })
   }
 
@@ -122,6 +171,7 @@ export function createGrid(): GridHandle {
       if (!cell) cell = recycleCell()
       const entry = entries[idx]!
       assignCell(cell, entry, idx, loader.getCached(entry.path))
+      markSelected(cell)
       cell.root.style.visibility = 'visible'
       placeCell(cell, idx)
       indexToCell.set(idx, cell)
@@ -154,10 +204,15 @@ export function createGrid(): GridHandle {
     if (s.entries !== prev.entries || s.currentFolder !== prev.currentFolder) {
       entries = s.entries
       loader.reset()
-      root.scrollTop = 0
+      topIndex = 0
       canvas.style.height = `${totalHeight(entries.length, layout)}px`
+      scrollToTop()
       fullRerender()
     }
+    if (s.selectedPath !== prev.selectedPath) {
+      for (const cell of indexToCell.values()) markSelected(cell)
+    }
+    if (prev.lightboxIndex !== null && s.lightboxIndex === null) revealSelected()
   })
 
   // Initial paint from current state (if any).
@@ -169,9 +224,12 @@ export function createGrid(): GridHandle {
     root,
     setZoom(targetCell: number) {
       zoom = targetCell
-      layout = computeLayout(root.clientWidth, zoom)
-      canvas.style.height = `${totalHeight(entries.length, layout)}px`
-      fullRerender()
+      relayout()
+    },
+    scrollToIndex(index: number) {
+      topIndex = Math.max(0, Math.min(index, entries.length - 1))
+      scrollToTop()
+      render()
     },
     dispose: () => {
       unsub()

@@ -34,6 +34,7 @@ slug = "0.1.6"
 oxipng = { version = "10.2.1", default-features = false }
 objc2-screen-capture-kit = { version = "0.3.2", default-features = false, features = ["std", "block2", "libc", "SCShareableContent", "SCStream", "SCRecordingOutput", "objc2-core-foundation", "objc2-core-graphics", "objc2-core-media", "objc2-av-foundation"] }
 block2 = "0.6.2"
+tauri-plugin-window-state = "2"
 
 [profile.release]
 opt-level = 3

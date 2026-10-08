@@ -1,5 +1,6 @@
 import { api } from './ipc'
-import { on } from './bus'
+import { emit, on } from './bus'
+import { getSession, updateSession } from './session'
 import { getState, setState } from './store'
 import { createSidebar } from './sidebar/sidebar'
 import { createGrid } from './grid/grid'
@@ -77,11 +78,32 @@ export async function initViewer(): Promise<void> {
   layout.append(sidebar, main)
   panel.append(layout, lightbox.root)
 
-  on('folder:request', ({ path }) => loadFolder(path))
+  on('folder:request', ({ path }) => {
+    if (getState().currentFolder === path) return
+    updateSession({ folder: path, topPath: null, topIndex: 0, selectedPath: null, bigView: false })
+    void loadFolder(path)
+  })
+
+  // Back to where you were: folder, top of the grid, selected image, open big view.
+  // Copy the session first: loading a folder closes the big view, which updates the session.
+  const last = { ...getSession() }
+  if (last.folder) {
+    void loadFolder(last.folder).then(() => {
+      // Skip if you already picked another folder while this one loaded.
+      if (getState().currentFolder !== last.folder) return
+      const { entries } = getState()
+      const byPath = last.topPath ? entries.findIndex((e) => e.path === last.topPath) : -1
+      grid.scrollToIndex(byPath >= 0 ? byPath : Math.min(last.topIndex, entries.length - 1))
+      const selected = last.selectedPath ? entries.findIndex((e) => e.path === last.selectedPath) : -1
+      if (selected < 0) return
+      setState({ selectedPath: last.selectedPath })
+      updateSession({ selectedPath: last.selectedPath })
+      if (last.bigView) emit('lightbox:open', { index: selected })
+    })
+  }
 
   async function loadFolder(dirPath: string): Promise<void> {
-    if (getState().currentFolder === dirPath) return
-    setState({ currentFolder: dirPath, entries: [], folders: [], truncated: false, loading: true })
+    setState({ currentFolder: dirPath, entries: [], folders: [], truncated: false, loading: true, selectedPath: null })
     pathEl.textContent = dirPath
     countEl.textContent = 'Loading…'
     const listing = await api.fs.listFolder(dirPath)

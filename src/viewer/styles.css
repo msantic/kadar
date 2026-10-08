@@ -233,6 +233,8 @@
   justify-content: center;
 }
 .viewer-cell:hover .viewer-cell-thumb { border-color: var(--border-light); }
+.viewer-cell.selected .viewer-cell-thumb { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.viewer-cell.selected .viewer-cell-label { color: var(--text); }
 .viewer-cell[data-kind="video"] .viewer-cell-thumb::after {
   content: '▶';
   position: absolute;

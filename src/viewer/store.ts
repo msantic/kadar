@@ -7,6 +7,8 @@ export interface ViewerState {
   truncated: boolean
   favorites: Favorite[]
   lightboxIndex: number | null
+  /** Image with the highlight: the last one opened. Kept by path, so it survives a reload. */
+  selectedPath: string | null
   loading: boolean
 }
 
@@ -19,6 +21,7 @@ const state: ViewerState = {
   truncated: false,
   favorites: [],
   lightboxIndex: null,
+  selectedPath: null,
   loading: false,
 }
 

@@ -1,20 +1,30 @@
 import { api } from '../ipc'
 import { emit } from '../bus'
+import { getState, subscribe } from '../store'
+import { getSession, updateSession } from '../session'
 import type { FolderEntry } from '../types'
 
 interface Node {
   entry: FolderEntry
+  depth: number
   el: HTMLLIElement
+  row: HTMLElement
+  caret: HTMLElement
   childrenEl: HTMLUListElement
-  childrenLoaded: boolean
+  children: Node[] | null
   expanded: boolean
 }
+
+// Every row by folder path, to mark the folder shown in the grid.
+const rowsByPath = new Map<string, HTMLElement>()
+// Folders that are open, kept in the session so they open again on the next start.
+const expanded = new Set<string>(getSession().expanded)
 
 export function createTree(): HTMLElement {
   const root = document.createElement('ul')
   root.className = 'viewer-tree'
 
-  void api.fs.getRoots().then((roots) => {
+  void api.fs.getRoots().then(async (roots) => {
     const items: FolderEntry[] = [
       { name: 'Home',      path: roots.home },
       { name: 'Pictures',  path: roots.pictures },
@@ -22,13 +32,29 @@ export function createTree(): HTMLElement {
       { name: 'Downloads', path: roots.downloads },
       { name: 'Movies',    path: roots.movies },
     ]
-    for (const item of items) root.appendChild(makeNode(item, 0))
+    const nodes = items.map((item) => makeNode(item, 0))
+    for (const node of nodes) root.appendChild(node.el)
+    await reopen(nodes)
+    markActive(getState().currentFolder)
+  })
+
+  subscribe((s, prev) => {
+    if (s.currentFolder !== prev.currentFolder) markActive(s.currentFolder)
   })
 
   return root
 }
 
-function makeNode(entry: FolderEntry, depth: number): HTMLLIElement {
+/** Opens the folders that were open last time, top down. */
+async function reopen(nodes: Node[]): Promise<void> {
+  for (const node of nodes) {
+    if (!expanded.has(node.entry.path)) continue
+    await setExpanded(node, true)
+    if (node.children) await reopen(node.children)
+  }
+}
+
+function makeNode(entry: FolderEntry, depth: number): Node {
   const li = document.createElement('li')
   li.className = 'viewer-tree-node'
 
@@ -51,41 +77,37 @@ function makeNode(entry: FolderEntry, depth: number): HTMLLIElement {
   childrenEl.className = 'viewer-tree-children'
   childrenEl.hidden = true
 
-  const node: Node = { entry, el: li, childrenEl, childrenLoaded: false, expanded: false }
+  const node: Node = { entry, depth, el: li, row, caret, childrenEl, children: null, expanded: false }
+  rowsByPath.set(entry.path, row)
 
-  row.addEventListener('click', (e) => {
-    const isCaret = e.target === caret
-    if (isCaret) {
-      toggle(node, depth)
-    } else {
-      emit('folder:request', { path: entry.path })
-      markActive(row)
-    }
-  })
-
+  row.addEventListener('click', () => emit('folder:request', { path: entry.path }))
   caret.addEventListener('click', (e) => {
     e.stopPropagation()
-    toggle(node, depth)
+    void setExpanded(node, !node.expanded)
   })
 
   li.append(row, childrenEl)
-  return li
+  return node
 }
 
-let activeRow: HTMLElement | null = null
-function markActive(row: HTMLElement): void {
-  activeRow?.classList.remove('active')
-  row.classList.add('active')
-  activeRow = row
+function markActive(path: string | null): void {
+  for (const row of rowsByPath.values()) row.classList.remove('active')
+  if (path) rowsByPath.get(path)?.classList.add('active')
 }
 
-async function toggle(node: Node, depth: number): Promise<void> {
-  node.expanded = !node.expanded
-  node.childrenEl.hidden = !node.expanded
-  node.el.querySelector('.viewer-tree-caret')!.classList.toggle('open', node.expanded)
-  if (node.expanded && !node.childrenLoaded) {
-    node.childrenLoaded = true
+async function setExpanded(node: Node, open: boolean): Promise<void> {
+  node.expanded = open
+  node.childrenEl.hidden = !open
+  node.caret.classList.toggle('open', open)
+  if (open) expanded.add(node.entry.path)
+  else expanded.delete(node.entry.path)
+  updateSession({ expanded: [...expanded] })
+
+  if (open && !node.children) {
     const kids = await api.fs.listTreeChildren(node.entry.path)
-    for (const k of kids) node.childrenEl.appendChild(makeNode(k, depth + 1))
+    node.children = kids.map((k) => makeNode(k, node.depth + 1))
+    for (const child of node.children) node.childrenEl.appendChild(child.el)
+    // A folder shown in the grid may sit inside the folder that just opened.
+    markActive(getState().currentFolder)
   }
 }

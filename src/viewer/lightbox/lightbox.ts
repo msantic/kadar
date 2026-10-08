@@ -1,6 +1,7 @@
 import { on } from '../bus'
 import { getState, setState, subscribe } from '../store'
 import { fileUrl } from '../ipc'
+import { updateSession } from '../session'
 
 export interface LightboxHandle {
   root: HTMLElement
@@ -36,18 +37,22 @@ export function createLightbox(): LightboxHandle {
   root.append(close, stage, caption)
 
   function hide(): void {
+    // Already closed: nothing to undo. Opening a folder calls this too.
+    if (root.hidden) return
     root.hidden = true
     video.pause()
     video.removeAttribute('src')
     img.removeAttribute('src')
     setState({ lightboxIndex: null })
+    updateSession({ bigView: false })
   }
 
   function show(index: number): void {
     const { entries } = getState()
     if (index < 0 || index >= entries.length) return
     const entry = entries[index]!
-    setState({ lightboxIndex: index })
+    setState({ lightboxIndex: index, selectedPath: entry.path })
+    updateSession({ bigView: true, selectedPath: entry.path })
     root.hidden = false
     caption.textContent = `${entry.name}  —  ${index + 1} / ${entries.length}`
     if (entry.kind === 'video') {
