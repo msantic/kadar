@@ -3,7 +3,8 @@
 #
 # Why not the Mac's own encoder: at the same file size its H.264 output is visibly worse than
 # x264 (blocky, soft text). Why not a stock ffmpeg: that is 45 MB. This one has only what the
-# optimizer needs: read MOV/MP4/MKV/WebM/AVI, write H.264 + AAC MP4. About 6-8 MB.
+# optimizer and recorder need: read MOV/MP4/MKV/WebM/AVI, write H.264 + AAC MP4, mix and
+# level audio. About 8 MB.
 #
 # Runs once; later runs exit at once when the binary exists. Pass --force to rebuild.
 # Note: x264 is GPL, so this ffmpeg is GPL. Fine for a personal app; check before selling Kadar.
@@ -12,8 +13,11 @@ set -euo pipefail
 APP="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$APP/src-tauri/bin/ffmpeg-aarch64-apple-darwin"
 FFMPEG_VERSION="7.1.1"
+# Bump when the configure flags change, so existing copies are rebuilt.
+BUILD_ID="2"
 
-if [ -x "$OUT" ] && [ "${1:-}" != "--force" ]; then
+STAMP="$OUT.build-id"
+if [ -x "$OUT" ] && [ "$(cat "$STAMP" 2>/dev/null)" = "$BUILD_ID" ] && [ "${1:-}" != "--force" ]; then
   exit 0
 fi
 
@@ -60,7 +64,7 @@ PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" ./configure \
   --enable-decoder=h264,hevc,prores,vp8,vp9,mpeg4,mjpeg,aac,mp3,opus,vorbis,alac,ac3,eac3,flac,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le \
   --enable-parser=h264,hevc,vp8,vp9,mpeg4video,aac,mpegaudio,opus,vorbis,ac3,flac \
   --enable-encoder=libx264,aac \
-  --enable-filter=scale,format,aformat,aresample,transpose,hflip,vflip,null,anull \
+  --enable-filter=scale,format,aformat,aresample,transpose,hflip,vflip,null,anull,amix,loudnorm \
   --enable-swscale --enable-swresample \
   > configure.log 2>&1 || { tail -30 configure.log; exit 1; }
 make -j"$JOBS" > make.log 2>&1 || { tail -30 make.log; exit 1; }
@@ -68,4 +72,5 @@ make -j"$JOBS" > make.log 2>&1 || { tail -30 make.log; exit 1; }
 mkdir -p "$(dirname "$OUT")"
 cp ffmpeg "$OUT"
 strip "$OUT"
+echo "$BUILD_ID" > "$STAMP"
 echo "==> Done: $OUT ($(du -h "$OUT" | cut -f1))"

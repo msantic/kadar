@@ -78,9 +78,13 @@ pub struct Permissions {
 }
 
 /// Asks macOS once for Screen Recording access; later calls only report the state.
+pub fn screen_access() -> bool {
+    CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess()
+}
+
 pub fn permissions() -> Permissions {
-    let screen = CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess();
-    Permissions { screen: if screen { "granted" } else { "denied" }, microphone: "granted" }
+    let screen = if screen_access() { "granted" } else { "denied" };
+    Permissions { screen, microphone: "granted" }
 }
 
 fn expand_home(dir: &str) -> PathBuf {

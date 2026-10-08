@@ -12,6 +12,7 @@ use crate::favorites::{Favorite, Favorites};
 use crate::formats::{kind_of, Kind};
 use crate::fs_scan::{self, FolderEntry, FolderListing};
 use crate::macos;
+use crate::recorder::{self, Recorder};
 use crate::optimize;
 use crate::thumbs::{FileInfo, RequestResult, ThumbService};
 use crate::watch::FolderWatch;
@@ -201,4 +202,29 @@ pub fn capture_resize_window(app: String, width: i32, height: i32, x: Option<i32
 #[tauri::command(async)]
 pub fn capture_take(options: capture::ShotOptions) -> Result<String, String> {
     capture::take(&options)
+}
+
+#[tauri::command(async)]
+pub fn record_microphones() -> Vec<recorder::Microphone> {
+    recorder::microphones()
+}
+
+/// Asks macOS for microphone access the first time; then reports "granted" or "denied".
+#[tauri::command(async)]
+pub fn record_mic_access() -> &'static str {
+    recorder::microphone_access()
+}
+
+#[tauri::command(async)]
+pub fn record_start(rec: State<'_, Recorder>, options: recorder::RecordOptions) -> Result<(), String> {
+    rec.start(options)
+}
+
+/// Stops and saves. Reports saving progress as "record-progress" events (0–99).
+#[tauri::command(async)]
+pub fn record_stop(app: AppHandle, rec: State<'_, Recorder>) -> Result<String, String> {
+    use tauri::Emitter;
+    rec.stop(&|p| {
+        let _ = app.emit("record-progress", p);
+    })
 }

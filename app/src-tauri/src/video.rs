@@ -2,6 +2,7 @@
 //! The Mac's own H.264 encoder was tested and gave visibly worse video at the same size,
 //! so Kadar ships this tool instead. It is built by `app/scripts/build-ffmpeg.sh`.
 
+use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -49,22 +50,30 @@ fn ffmpeg_path() -> PathBuf {
 }
 
 pub fn compress(src: &Path, dest: &Path, preset: Preset, progress: &dyn Fn(u32)) -> Result<(), String> {
+    let filter = preset.filter();
+    let args = [
+        "-vf", &filter,
+        "-c:v", "libx264", "-crf", "23", "-preset", "fast", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "128k",
+        "-movflags", "+faststart",
+    ];
+    let args: Vec<&OsStr> = args.iter().map(OsStr::new).collect();
+    encode(src, dest, &args, progress)
+}
+
+/// Runs the tool on `src` with `args`, writing `dest`. Writes under a temp name and renames at
+/// the end, so a stopped run never leaves a broken file that later runs would skip.
+pub fn encode(src: &Path, dest: &Path, args: &[&OsStr], progress: &dyn Fn(u32)) -> Result<(), String> {
     if let Some(dir) = dest.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
-    // Write under a temp name; rename at the end so a stopped run leaves no broken .mp4.
     let tmp = dest.with_extension("part.mp4");
 
     let mut child = Command::new(ffmpeg_path())
         .args(["-y", "-hide_banner", "-nostdin", "-i"])
         .arg(src)
-        .args([
-            "-vf", &preset.filter(),
-            "-c:v", "libx264", "-crf", "23", "-preset", "fast", "-pix_fmt", "yuv420p",
-            "-c:a", "aac", "-b:a", "128k",
-            "-movflags", "+faststart",
-            "-progress", "pipe:1", "-nostats",
-        ])
+        .args(args)
+        .args(["-progress", "pipe:1", "-nostats"])
         .arg(&tmp)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -117,6 +126,17 @@ pub fn compress(src: &Path, dest: &Path, preset: Preset, progress: &dyn Fn(u32))
         let reason = log.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("video tool failed");
         Err(reason.trim().to_string())
     }
+}
+
+/// Number of audio tracks in `path`, read from the tool's description of the file.
+pub fn audio_track_count(path: &Path) -> usize {
+    let Ok(out) = Command::new(ffmpeg_path()).args(["-hide_banner", "-nostdin", "-i"]).arg(path).output() else {
+        return 0;
+    };
+    String::from_utf8_lossy(&out.stderr)
+        .lines()
+        .filter(|l| l.trim_start().starts_with("Stream #") && l.contains(": Audio:"))
+        .count()
 }
 
 fn parse_duration(log: &str) -> Option<u64> {

@@ -6,6 +6,7 @@ mod fs_scan;
 mod macos;
 mod optimize;
 mod protocol;
+mod recorder;
 mod thumbs;
 mod video;
 mod watch;
@@ -25,6 +26,7 @@ pub fn run() {
             ));
             app.manage(favorites::Favorites::new(data_dir.join("viewer-favorites.json")));
             app.manage(watch::FolderWatch::default());
+            app.manage(recorder::Recorder::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -51,6 +53,10 @@ pub fn run() {
             commands::capture_permissions,
             commands::capture_resize_window,
             commands::capture_take,
+            commands::record_microphones,
+            commands::record_mic_access,
+            commands::record_start,
+            commands::record_stop,
         ])
         .run(tauri::generate_context!())
         .expect("Kadar failed to start");
