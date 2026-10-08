@@ -16,11 +16,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use tauri::{AppHandle, Manager, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
 pub fn run() {
     tauri::Builder::default()
+        // Before everything else: Finder can hand over files before the app is fully set up.
+        .manage(commands::OpenedFiles::default())
         .plugin(tauri_plugin_dialog::init())
         // Drag thumbnails out of the window as real files.
         .plugin(tauri_plugin_drag::init())
@@ -47,6 +49,7 @@ pub fn run() {
             commands::choose_folder,
             commands::reveal_in_finder,
             commands::trash_files,
+            commands::take_opened,
             commands::open_default,
             commands::watch_folder,
             commands::unwatch_folder,
@@ -72,8 +75,31 @@ pub fn run() {
             commands::record_start,
             commands::record_stop,
         ])
-        .run(tauri::generate_context!())
-        .expect("Kadar failed to start");
+        .build(tauri::generate_context!())
+        .expect("Kadar failed to start")
+        .run(|app, event| {
+            // Files opened from Finder ("Open With", double-click, drop on the Dock icon). They
+            // wait in a queue: at launch the window is not ready yet and takes them when it is.
+            #[cfg(target_os = "macos")]
+            if let RunEvent::Opened { urls } = event {
+                let paths: Vec<String> = urls
+                    .iter()
+                    .filter_map(|u| u.to_file_path().ok())
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .collect();
+                if paths.is_empty() {
+                    return;
+                }
+                if let Some(opened) = app.try_state::<commands::OpenedFiles>() {
+                    opened.0.lock().unwrap().extend(paths);
+                }
+                let _ = app.emit("open-paths", ());
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.unminimize();
+                    let _ = window.set_focus();
+                }
+            }
+        });
 }
 
 /// The window-state add-on saves only on a normal quit. Also save half a second after each move

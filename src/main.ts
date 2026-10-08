@@ -1,7 +1,10 @@
 // Kadar window: Viewer and Optimize tabs, running on the Rust backend.
 
 import './style.css'
+import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import { installCaptureBridge, installViewerBridge } from './bridge'
+import type { OpenItem } from './viewer'
 import { initOptimize } from './optimize'
 
 installViewerBridge()
@@ -18,7 +21,7 @@ let viewerStarted = false
 let screenshotStarted = false
 let recorderStarted = false
 
-function switchTab(tab: string): void {
+function switchTab(tab: string, open: OpenItem[] = []): void {
   if (!(tab in panels)) tab = 'viewer'
   activeTab = tab
   for (const [name, panel] of Object.entries(panels)) panel.hidden = name !== tab
@@ -28,9 +31,13 @@ function switchTab(tab: string): void {
   try { localStorage.setItem('persist:active-tab', tab) } catch { /* private mode */ }
 
   // Loaded after the bridge exists: the viewer reads `window.viewer` when its modules load.
-  if (tab === 'viewer' && !viewerStarted) {
-    viewerStarted = true
-    void import('./viewer').then(({ initViewer }) => initViewer())
+  if (tab === 'viewer') {
+    if (!viewerStarted) {
+      viewerStarted = true
+      void import('./viewer').then(({ initViewer }) => initViewer(open))
+    } else if (open.length > 0) {
+      void import('./viewer').then(({ openItems }) => openItems(open))
+    }
   }
   if (tab === 'record' && !recorderStarted) {
     recorderStarted = true
@@ -50,4 +57,14 @@ initOptimize(() => activeTab === 'optimize')
 
 let saved: string | null = null
 try { saved = localStorage.getItem('persist:active-tab') } catch { /* private mode */ }
-switchTab(saved ?? 'viewer')
+
+// Files opened from Finder: at launch they wait in Rust; later ones announce themselves.
+// Listen first, then take, so none is missed in between.
+const takeOpened = (): Promise<OpenItem[]> => invoke<OpenItem[]>('take_opened')
+void listen('open-paths', async () => {
+  const items = await takeOpened()
+  if (items.length > 0) switchTab('viewer', items)
+}).then(async () => {
+  const items = await takeOpened()
+  switchTab(items.length > 0 ? 'viewer' : saved ?? 'viewer', items)
+})

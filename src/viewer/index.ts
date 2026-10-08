@@ -12,7 +12,21 @@ import { ZOOM_MIN, ZOOM_MAX, ZOOM_DEFAULT } from './grid/grid-layout'
 
 let initialized = false
 
-export async function initViewer(): Promise<void> {
+/** A file or folder that Finder asked Kadar to open. */
+export interface OpenItem {
+  path: string
+  isDir: boolean
+}
+
+let openInViewer: ((items: OpenItem[]) => Promise<void>) | null = null
+
+/** Shows files opened from Finder: their folder, selected, the first one in the big view. */
+export function openItems(items: OpenItem[]): void {
+  void openInViewer?.(items)
+}
+
+/** Starts the viewer. With `open`, it shows those files instead of the last session. */
+export async function initViewer(open: OpenItem[] = []): Promise<void> {
   if (initialized) return
   initialized = true
 
@@ -132,8 +146,30 @@ export async function initViewer(): Promise<void> {
 
   // Back to where you were: folder, top of the grid, selected image, open big view.
   // Copy the session first: loading a folder closes the big view, which updates the session.
+  openInViewer = async (items) => {
+    const first = items[0]
+    if (!first) return
+    if (first.isDir) {
+      emit('folder:request', { path: first.path })
+      return
+    }
+    const folder = first.path.slice(0, first.path.lastIndexOf('/')) || '/'
+    if (getState().currentFolder !== folder) {
+      updateSession({ folder, topPath: null, topIndex: 0, selectedPath: null, selectedPaths: [], anchorPath: null, bigView: false })
+      await loadFolder(folder)
+    }
+    if (getState().currentFolder !== folder) return
+    const index = getState().entries.findIndex((e) => e.path === first.path)
+    restoreSelection(items.filter((i) => !i.isDir).map((i) => i.path), first.path, first.path)
+    if (index < 0) return
+    grid.scrollToIndex(index)
+    emit('lightbox:open', { index })
+  }
+
   const last = { ...getSession() }
-  if (last.folder) {
+  if (open.length > 0) {
+    void openInViewer(open)
+  } else if (last.folder) {
     void loadFolder(last.folder).then(() => {
       // Skip if you already picked another folder while this one loaded.
       if (getState().currentFolder !== last.folder) return

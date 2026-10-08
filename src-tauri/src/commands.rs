@@ -81,6 +81,26 @@ pub fn trash_files(paths: Vec<String>) -> Result<usize, String> {
     }
 }
 
+/// Files that Finder asked Kadar to open, not yet shown.
+#[derive(Default)]
+pub struct OpenedFiles(pub std::sync::Mutex<Vec<String>>);
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenedItem {
+    path: String,
+    is_dir: bool,
+}
+
+/// Hands the waiting opened files to the window, once.
+#[tauri::command]
+pub fn take_opened(opened: State<'_, OpenedFiles>) -> Vec<OpenedItem> {
+    std::mem::take(&mut *opened.0.lock().unwrap())
+        .into_iter()
+        .map(|path| OpenedItem { is_dir: Path::new(&path).is_dir(), path })
+        .collect()
+}
+
 #[tauri::command]
 pub fn reveal_in_finder(path: String) {
     let _ = Command::new("open").arg("-R").arg(path).spawn();

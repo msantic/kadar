@@ -29,8 +29,13 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg"],
-    "externalBin": ["bin/ffmpeg"],
+    "targets": [
+      "app",
+      "dmg"
+    ],
+    "externalBin": [
+      "bin/ffmpeg"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -41,6 +46,54 @@
       "minimumSystemVersion": "15.0",
       "entitlements": "Entitlements.plist",
       "signingIdentity": "Developer ID Application: Prelako d.o.o. (FC2M54RD3H)"
-    }
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "jpg",
+          "jpeg",
+          "png",
+          "heic",
+          "heif",
+          "webp",
+          "gif",
+          "tif",
+          "tiff",
+          "bmp",
+          "avif"
+        ],
+        "contentTypes": [
+          "public.jpeg",
+          "public.png",
+          "public.heic",
+          "public.heif",
+          "org.webmproject.webp",
+          "com.compuserve.gif",
+          "public.tiff",
+          "com.microsoft.bmp",
+          "public.avif"
+        ],
+        "name": "Image",
+        "role": "Viewer",
+        "rank": "Alternate"
+      },
+      {
+        "ext": [
+          "mp4",
+          "mov",
+          "m4v",
+          "webm"
+        ],
+        "contentTypes": [
+          "public.mpeg-4",
+          "com.apple.quicktime-movie",
+          "com.apple.m4v-video",
+          "org.webmproject.webm"
+        ],
+        "name": "Video",
+        "role": "Viewer",
+        "rank": "Alternate"
+      }
+    ]
   }
 }
