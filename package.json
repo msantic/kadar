@@ -6,13 +6,7 @@
   "scripts": {
     "dev": "scripts/build-ffmpeg.sh && PATH=\"$HOME/.cargo/bin:$PATH\" tauri dev",
     "build": "scripts/build-ffmpeg.sh && PATH=\"$HOME/.cargo/bin:$PATH\" tauri build",
-    "typecheck": "tsc",
-    "cli": "node index.mjs"
-  },
-  "dependencies": {
-    "fs-extra": "^11.3.0",
-    "sharp": "^0.34.2",
-    "slugify": "^1.6.6"
+    "typecheck": "tsc"
   },
   "devDependencies": {
     "@tauri-apps/api": "^2.12.1",
