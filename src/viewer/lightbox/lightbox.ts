@@ -81,7 +81,8 @@ export function createLightbox(): LightboxHandle {
   })
 
   const keyHandler = (e: KeyboardEvent): void => {
-    if (root.hidden) return
+    // A key the grid used (Space that just opened this view) must not close it again.
+    if (root.hidden || e.defaultPrevented) return
     if (e.key === 'Escape') { hide(); e.preventDefault() }
     else if (e.key === 'ArrowRight') { step(1); e.preventDefault() }
     else if (e.key === 'ArrowLeft')  { step(-1); e.preventDefault() }
@@ -89,6 +90,8 @@ export function createLightbox(): LightboxHandle {
       if (video.paused) void video.play(); else video.pause()
       e.preventDefault()
     }
+    // Space opens and closes, as Quick Look does. (For a video, Space plays and pauses.)
+    else if (e.key === ' ' || e.key === 'Enter') { hide(); e.preventDefault() }
   }
   window.addEventListener('keydown', keyHandler)
 

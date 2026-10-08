@@ -80,20 +80,66 @@ export function createGrid(): GridHandle {
     cell.root.classList.toggle('selected', !!cell.entry && cell.entry.path === selected)
   }
 
+  function selectedIndex(): number {
+    const selected = getState().selectedPath
+    return selected ? entries.findIndex((e) => e.path === selected) : -1
+  }
+
+  /** Scrolls the least needed to show the row of `index`. The scroll event then updates topIndex. */
+  function ensureVisible(index: number): void {
+    const rowTop = Math.floor(index / layout.columns) * layout.rowHeight
+    const rowBottom = rowTop + layout.rowHeight + layout.gap
+    if (rowTop < root.scrollTop) root.scrollTop = rowTop
+    else if (rowBottom > root.scrollTop + root.clientHeight) root.scrollTop = rowBottom - root.clientHeight
+  }
+
   /** After the big view closes, show the image it ended on if it is off screen. */
   function revealSelected(): void {
-    const selected = getState().selectedPath
-    const index = selected ? entries.findIndex((e) => e.path === selected) : -1
-    if (index < 0) return
-    const rowTop = Math.floor(index / layout.columns) * layout.rowHeight
-    const visible = rowTop >= root.scrollTop && rowTop + layout.rowHeight <= root.scrollTop + root.clientHeight
-    if (!visible) {
-      topIndex = Math.floor(index / layout.columns) * layout.columns
-      scrollToTop()
-      updateSession({ topIndex, topPath: entries[topIndex]?.path ?? null })
-      render()
-    }
+    const index = selectedIndex()
+    if (index >= 0) ensureVisible(index)
   }
+
+  function select(index: number): void {
+    const i = Math.max(0, Math.min(index, entries.length - 1))
+    const path = entries[i]!.path
+    setState({ selectedPath: path })
+    updateSession({ selectedPath: path })
+    ensureVisible(i)
+  }
+
+  // Finder-style keys in the grid: arrows, Home/End and Page Up/Down move the selection;
+  // Space or Return opens it in the big view. The big view handles its own keys while open.
+  window.addEventListener('keydown', (e) => {
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return
+    if (getState().lightboxIndex !== null || root.offsetParent === null || entries.length === 0) return
+    const target = e.target as HTMLElement | null
+    if (target && (target.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName))) return
+
+    const current = selectedIndex()
+    // With no selection yet, the first key selects the top-left image on screen.
+    const from = current >= 0 ? current : topIndex
+    const pageRows = Math.max(1, Math.floor(root.clientHeight / layout.rowHeight))
+    const last = entries.length - 1
+    let next: number | null = null
+    switch (e.key) {
+      case 'ArrowRight': next = current >= 0 ? from + 1 : from; break
+      case 'ArrowLeft':  next = current >= 0 ? from - 1 : from; break
+      case 'ArrowDown':  next = current >= 0 ? Math.min(from + layout.columns, last) : from; break
+      case 'ArrowUp':    next = current >= 0 ? (from - layout.columns >= 0 ? from - layout.columns : from) : from; break
+      case 'PageDown':   next = Math.min(from + layout.columns * pageRows, last); break
+      case 'PageUp':     next = Math.max(from - layout.columns * pageRows, from % layout.columns); break
+      case 'Home':       next = 0; break
+      case 'End':        next = last; break
+      case ' ':
+      case 'Enter':
+        e.preventDefault()
+        if (current >= 0) emit('lightbox:open', { index: current })
+        return
+      default: return
+    }
+    e.preventDefault()
+    select(next)
+  })
 
   function recycleCell(): CellHandle {
     const cell = createCell()
