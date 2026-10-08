@@ -13,6 +13,7 @@ Read README.md first: it has what Kadar does and which file does what. This file
 
 - `npm run dev` — run with live reload. `npm run build` — signed `.app` and `.dmg` in `src-tauri/target/release/bundle/`.
 - Rust tools are in `~/.cargo/bin`, which is not on the agent shell PATH. The npm scripts add it. For cargo directly, call `~/.cargo/bin/cargo` (run it in `src-tauri/`).
+- Kadar is installed in /Applications. To update it: `npm run build`, then `ditto src-tauri/target/release/bundle/macos/Kadar.app /Applications/Kadar.app` (quit Kadar first). Finder's "Open With" uses that copy.
 - `npx tsc` checks the window code. `~/.cargo/bin/cargo test` and `cargo build` must stay free of warnings.
 
 ## How the parts connect
@@ -29,6 +30,7 @@ Read README.md first: it has what Kadar does and which file does what. This file
 - **After moving folders, run `cargo clean`.** The build cache keeps absolute paths and fails.
 - **ScreenCaptureKit in `cargo test`** aborts with CGS_REQUIRE_INIT. Call `NSApplicationLoad()` first.
 - **loudnorm before AAC** needs `aresample=48000` after it. loudnorm outputs 192 kHz, and the AAC encoder rejects it.
+- **Files opened from Finder arrive before setup.** macOS sends them while the app still launches. Anything the open handler uses must be managed on the Builder, not in `setup()`, or the app aborts at launch.
 - **Changing the ffmpeg build flags:** bump `BUILD_ID` in `scripts/build-ffmpeg.sh`, or old copies stay in use.
 
 ## Checking the running app
