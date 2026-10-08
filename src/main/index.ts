@@ -1,12 +1,13 @@
-import { app, BrowserWindow, ipcMain, shell, dialog, systemPreferences, screen } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog, systemPreferences, screen, protocol, net } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { execFile } from 'child_process'
 import { createRequire } from 'module'
 import fs from 'fs-extra'
 import sharp from 'sharp'
-import { optimizeImages } from './optimizer/image'
+import { optimizeImages, type ImageFormat } from './optimizer/image'
 import { optimizeVideo, type VideoPreset } from './optimizer/video'
+import { registerViewer } from './viewer'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -25,12 +26,18 @@ ffmpegModule.setFfmpegPath(ffmpegPath)
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG'])
 const VIDEO_EXTS = new Set(['.mp4', '.mov', '.avi', '.mkv', '.webm', '.MOV'])
 
+// Register custom protocol so the renderer (served from http://localhost in dev)
+// can load arbitrary local files through a privileged scheme.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'viewer-file', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, bypassCSP: true } },
+])
+
 let mainWindow: BrowserWindow
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 700,
-    height: 620,
+    width: 1100,
+    height: 720,
     minWidth: 520,
     minHeight: 480,
     titleBarStyle: 'hiddenInset',
@@ -56,7 +63,18 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // Serve local files through the viewer-file:// scheme. The absolute path is
+  // URL-encoded into the hostname+pathname — we reconstruct it by decoding
+  // everything after the scheme.
+  protocol.handle('viewer-file', (request) => {
+    // URL is viewer-file://viewer/<encoded-abs-path>. Pathname is the
+    // already-encoded absolute path — forward it directly as a file:// URL.
+    const url = new URL(request.url)
+    return net.fetch(`file://${url.pathname}`)
+  })
+
   createWindow()
+  registerViewer(mainWindow)
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -70,6 +88,7 @@ app.on('window-all-closed', () => {
 
 interface OptimizeOptions {
   maxWidth: number
+  imageFormat: ImageFormat
   videoPreset: VideoPreset
 }
 
@@ -82,6 +101,7 @@ ipcMain.handle(
       if (IMAGE_EXTS.has(ext)) {
         await optimizeImages(filePath, {
           maxWidth: options.maxWidth ?? 1600,
+          format: options.imageFormat ?? 'webp',
           onProgress: (data) => mainWindow.webContents.send('file-progress', data),
         })
       } else if (VIDEO_EXTS.has(ext)) {

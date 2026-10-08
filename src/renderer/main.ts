@@ -4,7 +4,7 @@
 interface Permissions { screen: string; microphone: string }
 
 interface OptimizerAPI {
-  optimizeFiles: (files: string[], options: { maxWidth: number; videoPreset: string }) => Promise<{ success: boolean }>
+  optimizeFiles: (files: string[], options: { maxWidth: number; imageFormat: string; videoPreset: string }) => Promise<{ success: boolean }>
   openInFinder: (dirPath: string) => Promise<void>
   getPathForFile: (file: File) => string
   onFileProgress: (cb: (data: ProgressData) => void) => void
@@ -48,13 +48,28 @@ const items = new Map<string, QueueItem>()
 const panelOptimize   = document.getElementById('panel-optimize')!
 const panelRecord     = document.getElementById('panel-record')!
 const panelScreenshot = document.getElementById('panel-screenshot')!
+const panelViewer     = document.getElementById('panel-viewer')!
 let recorderInited    = false
 let screenshotInited  = false
+let viewerInited      = false
 
 // Persist optimize panel values
 import { persist } from './shared'
+persist('image-format')
 persist('max-width')
 persist('video-preset')
+
+// Keep the drop-zone hint in sync with the chosen image format
+const imageFormatSelect = document.getElementById('image-format') as HTMLSelectElement
+const dropSub = document.getElementById('drop-sub')!
+
+function updateDropSub(): void {
+  const label = imageFormatSelect.selectedOptions[0]?.textContent ?? 'WebP'
+  dropSub.innerHTML = `JPG &amp; PNG → ${label} &nbsp;·&nbsp; MP4, MOV, MKV → compressed MP4`
+}
+
+imageFormatSelect.addEventListener('change', updateDropSub)
+updateDropSub()
 
 async function switchTab(tab: string): Promise<void> {
   document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'))
@@ -63,6 +78,7 @@ async function switchTab(tab: string): Promise<void> {
   panelOptimize.hidden = true
   panelRecord.hidden = true
   panelScreenshot.hidden = true
+  panelViewer.hidden = true
 
   if (tab === 'record') {
     panelRecord.hidden = false
@@ -77,6 +93,13 @@ async function switchTab(tab: string): Promise<void> {
       const { initScreenshot } = await import('./screenshot')
       await initScreenshot()
       screenshotInited = true
+    }
+  } else if (tab === 'viewer') {
+    panelViewer.hidden = false
+    if (!viewerInited) {
+      const { initViewer } = await import('./viewer')
+      await initViewer()
+      viewerInited = true
     }
   } else {
     panelOptimize.hidden = false
@@ -128,6 +151,7 @@ dropZone.addEventListener('drop', async (e) => {
 
   const options = {
     maxWidth: parseInt((document.getElementById('max-width') as HTMLSelectElement).value, 10),
+    imageFormat: imageFormatSelect.value,
     videoPreset: (document.getElementById('video-preset') as HTMLSelectElement).value,
   }
 
