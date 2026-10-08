@@ -81,6 +81,30 @@ pub fn trash_files(paths: Vec<String>) -> Result<usize, String> {
     }
 }
 
+/// Renames a file in its folder. Returns the new path. Refuses names with "/" and names that
+/// another file already has (a change of upper/lower case only is allowed).
+#[tauri::command(async)]
+pub fn rename_file(path: String, new_name: String) -> Result<String, String> {
+    let name = new_name.trim();
+    if name.is_empty() || name == "." || name == ".." || name.contains('/') || name.contains('\0') {
+        return Err("This name is not allowed.".into());
+    }
+    let src = Path::new(&path);
+    let dest = src.parent().ok_or("No folder")?.join(name);
+    if dest == src {
+        return Ok(path);
+    }
+    // On the Mac, "Photo.jpg" and "photo.jpg" are the same file: then the rename only changes case.
+    let same_file = dest.exists()
+        && std::fs::canonicalize(&dest).ok() == std::fs::canonicalize(src).ok()
+        && dest.to_string_lossy().to_lowercase() == src.to_string_lossy().to_lowercase();
+    if dest.exists() && !same_file {
+        return Err(format!("\"{name}\" already exists in this folder."));
+    }
+    std::fs::rename(src, &dest).map_err(|e| e.to_string())?;
+    Ok(dest.to_string_lossy().into_owned())
+}
+
 /// Files that Finder asked Kadar to open, not yet shown.
 #[derive(Default)]
 pub struct OpenedFiles(pub std::sync::Mutex<Vec<String>>);

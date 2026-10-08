@@ -15,6 +15,11 @@ function pathAt(index: number): string | null {
   return getState().entries[index]?.path ?? null
 }
 
+/** One file by path, for example after a rename. */
+export function selectPath(path: string): void {
+  commit(new Set([path]), path, path)
+}
+
 /** Click or arrow key: this file only. */
 export function selectOnly(index: number): void {
   const path = pathAt(index)

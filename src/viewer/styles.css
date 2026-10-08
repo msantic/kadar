@@ -377,3 +377,32 @@
 
 .viewer-optimize-btn { flex-shrink: 0; color: var(--accent); }
 .viewer-optimize-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* Name filter in the toolbar */
+.viewer-filter {
+  flex-shrink: 1;
+  width: 150px;
+  min-width: 70px;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-hi);
+  color: var(--text);
+  outline: none;
+}
+.viewer-filter:focus { border-color: var(--accent); }
+
+/* Rename field in place of a cell's name */
+.viewer-rename {
+  font-size: 11px;
+  font-family: inherit;
+  padding: 0 3px;
+  margin: 0 -1px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--surface-hi);
+  color: var(--text);
+  outline: none;
+  min-width: 0;
+}

@@ -21,6 +21,8 @@ export interface ViewerSession {
   /** Sort order of the grid, the same for every folder. */
   sortBy: SortBy
   sortDescending: boolean
+  /** Name filter of the current folder; cleared when you open another folder. */
+  filter: string
 }
 
 const KEY = 'kadar:viewer-session'
@@ -37,6 +39,7 @@ const empty: ViewerSession = {
   expanded: [],
   sortBy: 'name',
   sortDescending: false,
+  filter: '',
 }
 
 function load(): ViewerSession {

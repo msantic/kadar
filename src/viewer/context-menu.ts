@@ -34,6 +34,11 @@ export async function showContextMenu(x: number, y: number): Promise<void> {
         text: 'Show in Finder',
         action: () => void window.viewer.fs.revealInFinder(focus),
       }),
+      await MenuItem.new({
+        text: 'Rename',
+        enabled: !many,
+        action: () => emit('rename:start', undefined),
+      }),
       await separator(),
       await MenuItem.new({
         text: many ? `Copy ${n} Files` : 'Copy',

@@ -56,6 +56,8 @@ export interface ViewerAPI {
     revealInFinder: (p: string) => Promise<void>
     /** Moves files to the Trash. Returns how many moved. */
     trash: (paths: string[]) => Promise<number>
+    /** Renames a file; returns its new path. */
+    rename: (path: string, newName: string) => Promise<string>
     openDefault: (p: string) => Promise<string>
     watch: (p: string) => Promise<void>
     unwatch: () => Promise<void>

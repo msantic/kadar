@@ -3,8 +3,9 @@ import { createCell, assignCell, setCellThumb, positionCell, type CellHandle } f
 import { ThumbLoader } from './thumb-loader'
 import { subscribe, getState } from '../store'
 import {
-  copySelection, extendTo, openSelectionDefault, selectAll, selectedPaths, selectOnly, toggle, trashSelection,
+  copySelection, extendTo, openSelectionDefault, selectAll, selectedPaths, selectOnly, selectPath, toggle, trashSelection,
 } from '../selection'
+import { on } from '../bus'
 import { showContextMenu } from '../context-menu'
 import { updateSession } from '../session'
 import { emit } from '../bus'
@@ -53,6 +54,8 @@ export function createGrid(): GridHandle {
   ro.observe(root)
 
   root.addEventListener('scroll', () => {
+    // A rename field sits on one cell; scrolling reuses cells, so finish the rename first.
+    editing?.input.blur()
     if (ownScrollTop !== null && Math.abs(root.scrollTop - ownScrollTop) < 1) {
       ownScrollTop = null
     } else {
@@ -163,15 +166,79 @@ export function createGrid(): GridHandle {
       case 'Home':       next = 0; break
       case 'End':        next = last; break
       case ' ':
-      case 'Enter':
         e.preventDefault()
         if (current >= 0) emit('lightbox:open', { index: current })
+        return
+      // Return renames, as in Finder (Space opens).
+      case 'Enter':
+        e.preventDefault()
+        if (current >= 0 && getState().selection.size <= 1) startRename(current)
         return
       default: return
     }
     e.preventDefault()
     select(next, e.shiftKey)
   })
+
+  // ─── Rename in place ──────────────────────────────────────────────────────
+  let editing: { input: HTMLInputElement } | null = null
+  on('rename:start', () => {
+    const index = selectedIndex()
+    if (index >= 0) startRename(index)
+  })
+
+  /** Return or "Rename": the name becomes a field. Return or a click elsewhere saves, Esc cancels.
+   *  The name without its extension is selected first, as in Finder. */
+  function startRename(index: number): void {
+    if (editing) return
+    const entry = entries[index]
+    if (!entry) return
+    ensureVisible(index)
+    render()
+    const cell = indexToCell.get(index)
+    if (!cell) return
+
+    const input = document.createElement('input')
+    input.className = 'viewer-rename'
+    input.value = entry.name
+    input.spellcheck = false
+    cell.label.hidden = true
+    cell.root.draggable = false
+    cell.root.appendChild(input)
+    editing = { input }
+    input.focus()
+    const dot = entry.name.lastIndexOf('.')
+    input.setSelectionRange(0, dot > 0 ? dot : entry.name.length)
+
+    let finished = false
+    const finish = async (save: boolean): Promise<void> => {
+      if (finished) return
+      finished = true
+      const name = input.value.trim()
+      input.remove()
+      cell.label.hidden = false
+      cell.root.draggable = true
+      editing = null
+      if (!save || !name || name === entry.name) return
+      try {
+        const newPath = await window.viewer.fs.rename(entry.path, name)
+        selectPath(newPath)
+        emit('folder:refresh', undefined)
+      } catch (err) {
+        emit('toast', { text: `Rename failed: ${String(err)}` })
+      }
+    }
+    // Keys stay in the field: the grid and the big view must not react while you type.
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation()
+      if (e.key === 'Enter') { e.preventDefault(); void finish(true) }
+      else if (e.key === 'Escape') { e.preventDefault(); void finish(false) }
+    })
+    input.addEventListener('blur', () => void finish(true))
+    for (const type of ['mousedown', 'click', 'dblclick'] as const) {
+      input.addEventListener(type, (e) => e.stopPropagation())
+    }
+  }
 
   function recycleCell(): CellHandle {
     const cell = createCell()

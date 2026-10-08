@@ -4,6 +4,7 @@ import { getSession, updateSession } from './session'
 import { optimizeSelection, restoreSelection, selectedPaths } from './selection'
 import { defaultDescending, SORT_LABELS, sortEntries, type SortBy } from './sort'
 import type { FileEntry } from './types'
+import { filterEntries } from './filter'
 import { getState, setState, subscribe } from './store'
 import { createSidebar } from './sidebar/sidebar'
 import { createGrid } from './grid/grid'
@@ -120,7 +121,46 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     optimizeBtn.textContent = n > 1 ? `Optimize ${n}` : 'Optimize'
   })
 
-  toolbar.append(openBtn, pathEl, countEl, optimizeBtn, sortSelect, sortDirBtn, sizeControl)
+  // Name filter: shows only files whose names contain the typed words. Cmd+F jumps here,
+  // Esc clears it. Kept between launches; opening another folder clears it.
+  const filterInput = document.createElement('input')
+  filterInput.type = 'search'
+  filterInput.className = 'viewer-filter'
+  filterInput.placeholder = 'Filter'
+  filterInput.spellcheck = false
+  filterInput.value = getSession().filter
+  let filterTimer: ReturnType<typeof setTimeout> | null = null
+  filterInput.addEventListener('input', () => {
+    if (filterTimer !== null) clearTimeout(filterTimer)
+    filterTimer = setTimeout(() => {
+      updateSession({ filter: filterInput.value })
+      resort()
+    }, 80)
+  })
+  filterInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      if (filterInput.value) {
+        filterInput.value = ''
+        updateSession({ filter: '' })
+        resort()
+      }
+      filterInput.blur()
+    } else if (e.key === 'Enter' || e.key === 'ArrowDown') {
+      // Back to the grid, so the arrow keys move the selection again.
+      e.preventDefault()
+      filterInput.blur()
+    }
+  })
+  window.addEventListener('keydown', (e) => {
+    if (e.metaKey && e.key.toLowerCase() === 'f' && main.offsetParent !== null && getState().lightboxIndex === null) {
+      e.preventDefault()
+      filterInput.focus()
+      filterInput.select()
+    }
+  })
+
+  toolbar.append(openBtn, pathEl, countEl, optimizeBtn, filterInput, sortSelect, sortDirBtn, sizeControl)
 
   const grid = createGrid()
   const lightbox = createLightbox()
@@ -140,7 +180,8 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
 
   on('folder:request', ({ path }) => {
     if (getState().currentFolder === path) return
-    updateSession({ folder: path, topPath: null, topIndex: 0, selectedPath: null, selectedPaths: [], anchorPath: null, bigView: false })
+    updateSession({ folder: path, topPath: null, topIndex: 0, selectedPath: null, selectedPaths: [], anchorPath: null, bigView: false, filter: '' })
+    filterInput.value = ''
     void loadFolder(path)
   })
 
@@ -155,10 +196,17 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     }
     const folder = first.path.slice(0, first.path.lastIndexOf('/')) || '/'
     if (getState().currentFolder !== folder) {
-      updateSession({ folder, topPath: null, topIndex: 0, selectedPath: null, selectedPaths: [], anchorPath: null, bigView: false })
+      updateSession({ folder, topPath: null, topIndex: 0, selectedPath: null, selectedPaths: [], anchorPath: null, bigView: false, filter: '' })
+      filterInput.value = ''
       await loadFolder(folder)
     }
     if (getState().currentFolder !== folder) return
+    // The opened file must be visible: clear a filter that hides it.
+    if (getSession().filter && !getState().entries.some((e) => e.path === first.path)) {
+      filterInput.value = ''
+      updateSession({ filter: '' })
+      resort()
+    }
     const index = getState().entries.findIndex((e) => e.path === first.path)
     restoreSelection(items.filter((i) => !i.isDir).map((i) => i.path), first.path, first.path)
     if (index < 0) return
@@ -182,16 +230,19 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     })
   }
 
-  const sorted = (list: FileEntry[]): FileEntry[] =>
-    sortEntries(list, getSession().sortBy, getSession().sortDescending)
+  // Every file of the folder, before the name filter; the grid shows `view()` of it.
+  let allFiles: FileEntry[] = []
+  const view = (): FileEntry[] =>
+    filterEntries(sortEntries(allFiles, getSession().sortBy, getSession().sortDescending), getSession().filter)
 
-  /** New sort order: keep the selected image (or the top one) in view. */
+  /** New sort order or filter: keep the selected image (or the top one) in view. */
   function resort(): void {
-    const { entries, selectedPath } = getState()
-    if (entries.length === 0) return
+    const { selectedPath } = getState()
+    if (allFiles.length === 0) return
     const keep = selectedPath ?? getSession().topPath
-    const next = sorted(entries)
+    const next = view()
     setState({ entries: next })
+    showCount()
     const index = keep ? next.findIndex((e) => e.path === keep) : -1
     if (index >= 0) {
       grid.scrollToIndex(index)
@@ -208,23 +259,26 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     countEl.textContent = 'Loading…'
     const listing = await api.fs.listFolder(dirPath)
     if (getState().currentFolder !== dirPath) return
+    allFiles = listing.files
     setState({
-      entries: sorted(listing.files),
+      entries: view(),
       folders: listing.folders,
       truncated: listing.truncated,
       loading: false,
     })
-    showCount(listing.files.length, listing.truncated)
+    showCount()
     void api.fs.watch(dirPath)
   }
 
-  function showCount(n: number, truncated: boolean): void {
-    const selected = getState().selection.size
-    countEl.textContent = `${n} ${n === 1 ? 'item' : 'items'}${truncated ? ' (truncated)' : ''}`
-      + (selected > 1 ? `  ·  ${selected} selected` : '')
+  function showCount(): void {
+    const { entries, selection, truncated } = getState()
+    const total = allFiles.length
+    const shown = entries.length === total ? `${total}` : `${entries.length} of ${total}`
+    countEl.textContent = `${shown} ${total === 1 ? 'item' : 'items'}${truncated ? ' (truncated)' : ''}`
+      + (selection.size > 1 ? `  ·  ${selection.size} selected` : '')
   }
   subscribe((s, prev) => {
-    if (s.selection !== prev.selection && !s.loading) showCount(s.entries.length, s.truncated)
+    if (s.selection !== prev.selection && !s.loading) showCount()
   })
 
   // Short confirmation after a copy, above everything, also over the big view.
@@ -254,12 +308,13 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     const state = getState()
     if (state.currentFolder !== dirPath) return
     // Nothing changed that the grid shows: skip, so the view does not redraw for nothing.
-    const old = new Map(state.entries.map((e) => [e.path, e]))
-    const same = listing.files.length === state.entries.length
+    const old = new Map(allFiles.map((e) => [e.path, e]))
+    const same = listing.files.length === allFiles.length
       && listing.files.every((f) => old.get(f.path)?.mtimeMs === f.mtimeMs && old.get(f.path)?.size === f.size)
     if (same) return
 
-    const next = sorted(listing.files)
+    allFiles = listing.files
+    const next = view()
     // Selected files may be gone; the open big view follows its image to its new place.
     setState({ entries: next, folders: listing.folders, truncated: listing.truncated })
     restoreSelection([...state.selection], state.selectedPath, state.anchorPath)
@@ -269,6 +324,6 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
       if (bigViewIndex !== null && bigViewIndex >= 0) setState({ lightboxIndex: bigViewIndex })
       else emit('lightbox:close', undefined)
     }
-    showCount(listing.files.length, listing.truncated)
+    showCount()
   }
 }

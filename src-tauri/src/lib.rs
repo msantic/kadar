@@ -49,6 +49,7 @@ pub fn run() {
             commands::choose_folder,
             commands::reveal_in_finder,
             commands::trash_files,
+            commands::rename_file,
             commands::take_opened,
             commands::open_default,
             commands::watch_folder,

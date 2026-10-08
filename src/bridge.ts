@@ -29,6 +29,7 @@ export function installViewerBridge(): void {
       chooseFolder:     () => invoke('choose_folder'),
       revealInFinder:   (path) => invoke('reveal_in_finder', { path }),
       trash:            (paths) => invoke('trash_files', { paths }),
+      rename:           (path, newName) => invoke('rename_file', { path, newName }),
       openDefault:      (path) => invoke('open_default', { path }),
       watch:            (path) => invoke('watch_folder', { path }),
       unwatch:          () => invoke('unwatch_folder'),
