@@ -2,6 +2,7 @@ import { on } from '../bus'
 import { getState, setState, subscribe } from '../store'
 import { fileUrl } from '../ipc'
 import { updateSession } from '../session'
+import { copySelection, selectOnly } from '../selection'
 import type { FileEntry } from '../types'
 
 export interface LightboxHandle {
@@ -233,8 +234,9 @@ export function createLightbox(): LightboxHandle {
     if (index < 0 || index >= entries.length) return
     const entry = entries[index]!
     current = entry
-    setState({ lightboxIndex: index, selectedPath: entry.path })
-    updateSession({ bigView: true, selectedPath: entry.path })
+    selectOnly(index)
+    setState({ lightboxIndex: index })
+    updateSession({ bigView: true })
     root.hidden = false
 
     if (entry.kind === 'video') {
@@ -276,6 +278,9 @@ export function createLightbox(): LightboxHandle {
     // A key the grid used (Space that just opened this view) must not close it again.
     if (root.hidden || e.defaultPrevented) return
     const zoomable = !img.hidden
+    // Cmd+C copies the shown file, Shift+Cmd+C its path, as in the grid.
+    if (e.metaKey && e.key.toLowerCase() === 'c') { void copySelection(e.shiftKey); e.preventDefault(); return }
+    if (e.metaKey) return
     if (e.key === 'Escape') { hide(); e.preventDefault() }
     else if (e.key === 'ArrowRight') { step(1); e.preventDefault() }
     else if (e.key === 'ArrowLeft')  { step(-1); e.preventDefault() }

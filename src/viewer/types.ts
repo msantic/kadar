@@ -73,6 +73,10 @@ export interface ViewerAPI {
   meta: {
     get: (filePath: string) => Promise<FileMetadata>
   }
+  clipboard: {
+    copyFiles: (paths: string[]) => Promise<void>
+    copyPaths: (paths: string[]) => Promise<void>
+  }
   favorites: {
     list: () => Promise<Favorite[]>
     add: (p: string) => Promise<Favorite>

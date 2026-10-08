@@ -1,7 +1,8 @@
 import { computeLayout, totalHeight, ZOOM_DEFAULT, type GridLayout } from './grid-layout'
 import { createCell, assignCell, setCellThumb, positionCell, type CellHandle } from './grid-cell'
 import { ThumbLoader } from './thumb-loader'
-import { subscribe, getState, setState } from '../store'
+import { subscribe, getState } from '../store'
+import { copySelection, extendTo, selectAll, selectOnly, toggle } from '../selection'
 import { updateSession } from '../session'
 import { emit } from '../bus'
 import type { FileEntry } from '../types'
@@ -76,8 +77,10 @@ export function createGrid(): GridHandle {
   }
 
   function markSelected(cell: CellHandle): void {
-    const selected = getState().selectedPath
-    cell.root.classList.toggle('selected', !!cell.entry && cell.entry.path === selected)
+    const { selection, selectedPath } = getState()
+    const path = cell.entry?.path
+    cell.root.classList.toggle('selected', !!path && (selection.has(path) || path === selectedPath))
+    cell.root.classList.toggle('focused', !!path && path === selectedPath && selection.size > 1)
   }
 
   function selectedIndex(): number {
@@ -99,16 +102,18 @@ export function createGrid(): GridHandle {
     if (index >= 0) ensureVisible(index)
   }
 
-  function select(index: number): void {
+  /** Moves the focus to `index`: alone, or growing the Shift range. */
+  function select(index: number, extend = false): void {
     const i = Math.max(0, Math.min(index, entries.length - 1))
-    const path = entries[i]!.path
-    setState({ selectedPath: path })
-    updateSession({ selectedPath: path })
+    if (extend) extendTo(i)
+    else selectOnly(i)
     ensureVisible(i)
   }
 
-  // Finder-style keys in the grid: arrows, Home/End and Page Up/Down move the selection;
-  // Space or Return opens it in the big view. The big view handles its own keys while open.
+  // Finder-style keys in the grid: arrows, Home/End and Page Up/Down move the selection (with
+  // Shift they grow it); Space or Return opens the big view; Cmd+A selects all; Cmd+C copies the
+  // files, Shift+Cmd+C their paths; Esc keeps only the focused file. The big view handles its own
+  // keys while open.
   window.addEventListener('keydown', (e) => {
     if (e.defaultPrevented || e.ctrlKey || e.altKey) return
     if (getState().lightboxIndex !== null || root.offsetParent === null || entries.length === 0) return
@@ -116,12 +121,24 @@ export function createGrid(): GridHandle {
     if (target && (target.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName))) return
 
     const current = selectedIndex()
-    // Cmd+O or Cmd+Down opens the file in its default app, as in Finder.
     if (e.metaKey) {
-      if ((e.key === 'o' || e.key === 'ArrowDown') && current >= 0) {
+      const key = e.key.toLowerCase()
+      // Cmd+O or Cmd+Down opens the file in its default app, as in Finder.
+      if ((key === 'o' || e.key === 'ArrowDown') && current >= 0) {
         e.preventDefault()
         void window.viewer.fs.openDefault(entries[current]!.path)
+      } else if (key === 'a') {
+        e.preventDefault()
+        selectAll()
+      } else if (key === 'c') {
+        e.preventDefault()
+        void copySelection(e.shiftKey)
       }
+      return
+    }
+    if (e.key === 'Escape' && current >= 0 && getState().selection.size > 1) {
+      e.preventDefault()
+      selectOnly(current)
       return
     }
     // With no selection yet, the first key selects the top-left image on screen.
@@ -146,7 +163,7 @@ export function createGrid(): GridHandle {
       default: return
     }
     e.preventDefault()
-    select(next)
+    select(next, e.shiftKey)
   })
 
   function recycleCell(): CellHandle {
@@ -166,12 +183,11 @@ export function createGrid(): GridHandle {
 
   function handleClick(e: MouseEvent, cell: CellHandle): void {
     if (!cell.entry) return
-    if (e.metaKey || e.ctrlKey) {
-      void window.viewer.fs.revealInFinder(cell.entry.path)
-      return
-    }
-    // As in Finder: one click selects, a double-click opens.
-    select(cell.index)
+    // As in Finder: click selects, Cmd+click adds or removes, Shift+click selects a range,
+    // double-click opens. Right-click shows the file in Finder.
+    if (e.metaKey) toggle(cell.index)
+    else if (e.shiftKey) extendTo(cell.index)
+    else selectOnly(cell.index)
   }
 
   function render(): void {
@@ -266,7 +282,7 @@ export function createGrid(): GridHandle {
       scrollToTop()
       fullRerender()
     }
-    if (s.selectedPath !== prev.selectedPath) {
+    if (s.selectedPath !== prev.selectedPath || s.selection !== prev.selection) {
       for (const cell of indexToCell.values()) markSelected(cell)
     }
     if (prev.lightboxIndex !== null && s.lightboxIndex === null) revealSelected()

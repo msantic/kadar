@@ -10,8 +10,10 @@ export interface ViewerSession {
   /** First image in the top grid row; the grid scrolls back to it. Path first, index as fallback. */
   topPath: string | null
   topIndex: number
-  /** Image with the highlight. */
+  /** Focused file, every selected file, and where a Shift range starts. */
   selectedPath: string | null
+  selectedPaths: string[]
+  anchorPath: string | null
   /** True when the big view was open on the selected image. */
   bigView: boolean
   /** Sidebar folders that were expanded. */
@@ -29,6 +31,8 @@ const empty: ViewerSession = {
   topPath: null,
   topIndex: 0,
   selectedPath: null,
+  selectedPaths: [],
+  anchorPath: null,
   bigView: false,
   expanded: [],
   sortBy: 'name',

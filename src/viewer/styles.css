@@ -353,3 +353,23 @@
   padding: 1px 6px;
   margin-left: -6px;
 }
+
+/* Multi-select: every selected file has the accent frame; the focused one in a larger
+   selection gets a stronger ring, so arrows and Shift ranges have a visible start. */
+.viewer-cell.focused .viewer-cell-thumb { box-shadow: 0 0 0 3px var(--accent), 0 0 0 5px rgba(10, 132, 255, 0.35); }
+
+.viewer-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 300;
+  padding: 7px 14px;
+  border-radius: 8px;
+  background: rgba(44, 44, 46, 0.95);
+  border: 1px solid var(--border-light);
+  color: var(--text);
+  font-size: 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}

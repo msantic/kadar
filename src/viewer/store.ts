@@ -7,8 +7,12 @@ export interface ViewerState {
   truncated: boolean
   favorites: Favorite[]
   lightboxIndex: number | null
-  /** Image with the highlight: the last one opened. Kept by path, so it survives a reload. */
+  /** Focused file: arrow keys and the big view start here. Kept by path, so it survives a reload. */
   selectedPath: string | null
+  /** Every selected file (Cmd+click, Shift+click, Cmd+A). */
+  selection: ReadonlySet<string>
+  /** Where a Shift range starts. */
+  anchorPath: string | null
   loading: boolean
 }
 
@@ -22,6 +26,8 @@ const state: ViewerState = {
   favorites: [],
   lightboxIndex: null,
   selectedPath: null,
+  selection: new Set(),
+  anchorPath: null,
   loading: false,
 }
 

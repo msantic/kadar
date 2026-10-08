@@ -1,9 +1,10 @@
 import { api } from './ipc'
 import { emit, on } from './bus'
 import { getSession, updateSession } from './session'
+import { restoreSelection } from './selection'
 import { defaultDescending, SORT_LABELS, sortEntries, type SortBy } from './sort'
 import type { FileEntry } from './types'
-import { getState, setState } from './store'
+import { getState, setState, subscribe } from './store'
 import { createSidebar } from './sidebar/sidebar'
 import { createGrid } from './grid/grid'
 import { createLightbox } from './lightbox/lightbox'
@@ -108,7 +109,7 @@ export async function initViewer(): Promise<void> {
 
   on('folder:request', ({ path }) => {
     if (getState().currentFolder === path) return
-    updateSession({ folder: path, topPath: null, topIndex: 0, selectedPath: null, bigView: false })
+    updateSession({ folder: path, topPath: null, topIndex: 0, selectedPath: null, selectedPaths: [], anchorPath: null, bigView: false })
     void loadFolder(path)
   })
 
@@ -122,11 +123,9 @@ export async function initViewer(): Promise<void> {
       const { entries } = getState()
       const byPath = last.topPath ? entries.findIndex((e) => e.path === last.topPath) : -1
       grid.scrollToIndex(byPath >= 0 ? byPath : Math.min(last.topIndex, entries.length - 1))
+      restoreSelection(last.selectedPaths, last.selectedPath, last.anchorPath)
       const selected = last.selectedPath ? entries.findIndex((e) => e.path === last.selectedPath) : -1
-      if (selected < 0) return
-      setState({ selectedPath: last.selectedPath })
-      updateSession({ selectedPath: last.selectedPath })
-      if (last.bigView) emit('lightbox:open', { index: selected })
+      if (selected >= 0 && last.bigView) emit('lightbox:open', { index: selected })
     })
   }
 
@@ -148,7 +147,10 @@ export async function initViewer(): Promise<void> {
   }
 
   async function loadFolder(dirPath: string): Promise<void> {
-    setState({ currentFolder: dirPath, entries: [], folders: [], truncated: false, loading: true, selectedPath: null })
+    setState({
+      currentFolder: dirPath, entries: [], folders: [], truncated: false, loading: true,
+      selectedPath: null, selection: new Set(), anchorPath: null,
+    })
     pathEl.textContent = dirPath
     countEl.textContent = 'Loading…'
     const listing = await api.fs.listFolder(dirPath)
@@ -164,8 +166,26 @@ export async function initViewer(): Promise<void> {
   }
 
   function showCount(n: number, truncated: boolean): void {
+    const selected = getState().selection.size
     countEl.textContent = `${n} ${n === 1 ? 'item' : 'items'}${truncated ? ' (truncated)' : ''}`
+      + (selected > 1 ? `  ·  ${selected} selected` : '')
   }
+  subscribe((s, prev) => {
+    if (s.selection !== prev.selection && !s.loading) showCount(s.entries.length, s.truncated)
+  })
+
+  // Short confirmation after a copy, above everything, also over the big view.
+  const toast = document.createElement('div')
+  toast.className = 'viewer-toast'
+  toast.hidden = true
+  document.body.appendChild(toast)
+  let toastTimer: ReturnType<typeof setTimeout> | null = null
+  on('toast', ({ text }) => {
+    toast.textContent = text
+    toast.hidden = false
+    if (toastTimer !== null) clearTimeout(toastTimer)
+    toastTimer = setTimeout(() => { toast.hidden = true }, 1600)
+  })
 
   // Live folder: files added, removed or changed show up without reopening the folder.
   api.fs.onChanged(({ dirPath }) => {
@@ -183,10 +203,11 @@ export async function initViewer(): Promise<void> {
     if (same) return
 
     const next = sorted(listing.files)
-    // The selected image may be gone; the open big view follows its image to its new place.
-    const selected = state.selectedPath && next.some((e) => e.path === state.selectedPath) ? state.selectedPath : null
+    // Selected files may be gone; the open big view follows its image to its new place.
+    setState({ entries: next, folders: listing.folders, truncated: listing.truncated })
+    restoreSelection([...state.selection], state.selectedPath, state.anchorPath)
+    const selected = getState().selectedPath
     const bigViewIndex = state.lightboxIndex !== null && selected ? next.findIndex((e) => e.path === selected) : null
-    setState({ entries: next, folders: listing.folders, truncated: listing.truncated, selectedPath: selected })
     if (state.lightboxIndex !== null) {
       if (bigViewIndex !== null && bigViewIndex >= 0) setState({ lightboxIndex: bigViewIndex })
       else emit('lightbox:close', undefined)

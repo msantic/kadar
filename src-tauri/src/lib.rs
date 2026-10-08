@@ -1,4 +1,5 @@
 mod capture;
+mod clipboard;
 mod commands;
 mod favorites;
 mod formats;
@@ -57,6 +58,8 @@ pub fn run() {
             commands::optimize_files,
             commands::open_in_finder,
             commands::open_external,
+            commands::copy_files,
+            commands::copy_paths,
             commands::capture_running_apps,
             commands::capture_permissions,
             commands::capture_resize_window,

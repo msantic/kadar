@@ -7,7 +7,7 @@ use std::path::Path;
 use objc2::rc::autoreleasepool;
 use objc2_av_foundation::{AVAsset, AVAssetImageGenerator};
 use objc2_core_foundation::{
-    CFBoolean, CFDictionary, CFNumber, CFRetained, CFString, CFType, CFURL, CGSize,
+    CFBoolean, CFDictionary, CFMutableData, CFNumber, CFRetained, CFString, CFType, CFURL, CGSize,
 };
 use objc2_core_foundation::{CGPoint, CGRect};
 use objc2_core_graphics::{
@@ -218,3 +218,21 @@ pub fn decode_for_web(path: &Path, max_width: u32) -> Result<Rgba, String> {
     };
     to_rgba(&image_thumbnail(path, long)?)
 }
+
+/// The image as PNG bytes, for the clipboard (web pages and chats paste PNG). PNG files are
+/// used as they are; other formats are decoded at full size, with EXIF rotation applied.
+pub fn png_bytes(path: &Path) -> Option<Vec<u8>> {
+    if crate::formats::ext_of(&path.to_string_lossy()) == "png" {
+        return std::fs::read(path).ok();
+    }
+    let (w, h) = image_size(path)?;
+    let frame = image_thumbnail(path, w.max(h)).ok()?;
+    let data = CFMutableData::new(None, 0)?;
+    let dest = unsafe { CGImageDestination::with_data(&data, &CFString::from_str("public.png"), 1, None) }?;
+    unsafe { dest.add_image(frame.image(), None) };
+    if !unsafe { dest.finalize() } {
+        return None;
+    }
+    Some(data.to_vec())
+}
+

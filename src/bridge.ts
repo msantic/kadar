@@ -42,6 +42,10 @@ export function installViewerBridge(): void {
     meta: {
       get: (filePath) => invoke('meta_get', { filePath }),
     },
+    clipboard: {
+      copyFiles: (paths) => invoke('copy_files', { paths }),
+      copyPaths: (paths) => invoke('copy_paths', { paths }),
+    },
     favorites: {
       list:   () => invoke('fav_list'),
       add:    (path) => invoke('fav_add', { path }),

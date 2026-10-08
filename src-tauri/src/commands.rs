@@ -8,6 +8,7 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 use crate::capture;
+use crate::clipboard;
 use crate::favorites::{Favorite, Favorites};
 use crate::formats::{kind_of, Kind};
 use crate::fs_scan::{self, FolderEntry, FolderListing};
@@ -227,4 +228,16 @@ pub fn record_stop(app: AppHandle, rec: State<'_, Recorder>) -> Result<String, S
     rec.stop(&|p| {
         let _ = app.emit("record-progress", p);
     })
+}
+
+/// Cmd+C: copies the files (and the picture of a single image) to the clipboard.
+#[tauri::command(async)]
+pub fn copy_files(app: AppHandle, paths: Vec<String>) -> Result<(), String> {
+    clipboard::copy_files(&app, paths)
+}
+
+/// Shift+Cmd+C: copies the full paths, one per line.
+#[tauri::command(async)]
+pub fn copy_paths(app: AppHandle, paths: Vec<String>) -> Result<(), String> {
+    clipboard::copy_paths(&app, paths)
 }
