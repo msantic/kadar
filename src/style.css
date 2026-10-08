@@ -34,12 +34,16 @@
   color: var(--text);
 }
 
+/* Input fields keep normal text selection. */
+input, textarea { -webkit-user-select: text; user-select: text; }
+
 body {
   background: var(--bg);
   height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  -webkit-user-select: none; /* WebKit still needs the prefix */
   user-select: none;
 }
 

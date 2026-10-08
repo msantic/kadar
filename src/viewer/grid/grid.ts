@@ -170,6 +170,8 @@ export function createGrid(): GridHandle {
     const cell = createCell()
     cellPool.push(cell)
     canvas.appendChild(cell.root)
+    // Shift+click and double-click must not start a text selection or move the keyboard focus.
+    cell.root.addEventListener('mousedown', (e) => { if (e.shiftKey || e.metaKey || e.detail > 1) e.preventDefault() })
     cell.root.addEventListener('click', (e) => handleClick(e, cell))
     cell.root.addEventListener('dblclick', () => {
       if (cell.entry) emit('lightbox:open', { index: cell.index })

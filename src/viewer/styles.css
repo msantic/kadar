@@ -306,6 +306,7 @@
   max-width: none;
   max-height: none;
   transform-origin: 0 0;
+  -webkit-user-select: none;
   user-select: none;
 }
 .viewer-lightbox-img.zoomed { cursor: grab; }
