@@ -46,6 +46,7 @@ pub fn run() {
             commands::get_roots,
             commands::choose_folder,
             commands::reveal_in_finder,
+            commands::trash_files,
             commands::open_default,
             commands::watch_folder,
             commands::unwatch_folder,

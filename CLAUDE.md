@@ -33,7 +33,8 @@ Read README.md first: it has what Kadar does and which file does what. This file
 
 ## Checking the running app
 
-- Take a picture of the window only: find its window id with CGWindowList (owner "kadar"), then `screencapture -l <id> -x -o out.png`. Never capture the whole screen.
+- Take a picture of Kadar's own windows only: find the window id with CGWindowList (owner "kadar"), then `screencapture -l <id> -x -o out.png`. A right-click menu is its own Kadar window (layer above 0); capture it the same way.
+- Never capture the whole screen or a screen area (`screencapture -R`). Other apps' windows can cover Kadar and show the owner's private content. This happened once.
 - Do not send synthetic clicks. They do not reach Kadar and can land in other apps. To test a flow, add a temporary call in `src/main.ts`, check, and remove it.
 
 ## Safety

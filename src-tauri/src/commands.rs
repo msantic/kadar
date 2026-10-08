@@ -61,6 +61,26 @@ pub fn choose_folder(app: AppHandle) -> Option<String> {
         .map(|p| p.to_string_lossy().into_owned())
 }
 
+/// Moves files to the Trash, as Finder does ("Put Back" works). Returns how many moved.
+#[tauri::command(async)]
+pub fn trash_files(paths: Vec<String>) -> Result<usize, String> {
+    use objc2_foundation::{NSFileManager, NSString, NSURL};
+    let fm = NSFileManager::defaultManager();
+    let mut moved = 0;
+    let mut last_error = None;
+    for path in &paths {
+        let url = NSURL::fileURLWithPath(&NSString::from_str(path));
+        match fm.trashItemAtURL_resultingItemURL_error(&url, None) {
+            Ok(()) => moved += 1,
+            Err(e) => last_error = Some(e.localizedDescription().to_string()),
+        }
+    }
+    match last_error {
+        Some(e) if moved == 0 => Err(e),
+        _ => Ok(moved),
+    }
+}
+
 #[tauri::command]
 pub fn reveal_in_finder(path: String) {
     let _ = Command::new("open").arg("-R").arg(path).spawn();

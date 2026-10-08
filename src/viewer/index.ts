@@ -1,7 +1,7 @@
 import { api } from './ipc'
 import { emit, on } from './bus'
 import { getSession, updateSession } from './session'
-import { restoreSelection, selectedPaths } from './selection'
+import { optimizeSelection, restoreSelection, selectedPaths } from './selection'
 import { defaultDescending, SORT_LABELS, sortEntries, type SortBy } from './sort'
 import type { FileEntry } from './types'
 import { getState, setState, subscribe } from './store'
@@ -94,22 +94,10 @@ export async function initViewer(): Promise<void> {
   optimizeBtn.className = 'viewer-ghost-btn viewer-optimize-btn'
   optimizeBtn.title = 'Make web copies in an "optimized" folder, with the Optimize tab settings'
   optimizeBtn.hidden = true
-  let optimizing = false
   optimizeBtn.addEventListener('click', async () => {
-    const paths = selectedPaths()
-    if (paths.length === 0 || optimizing) return
-    optimizing = true
     optimizeBtn.disabled = true
-    emit('toast', { text: `Optimizing ${paths.length} ${paths.length === 1 ? 'file' : 'files'}…` })
-    try {
-      const n = await window.viewer.share.optimize(paths)
-      emit('toast', { text: `Optimized ${n} ${n === 1 ? 'file' : 'files'} → "optimized" folder` })
-    } catch (err) {
-      emit('toast', { text: `Optimize failed: ${String(err)}` })
-    } finally {
-      optimizing = false
-      optimizeBtn.disabled = false
-    }
+    await optimizeSelection()
+    optimizeBtn.disabled = false
   })
   subscribe((s, prev) => {
     if (s.selection === prev.selection && s.selectedPath === prev.selectedPath) return
@@ -219,6 +207,10 @@ export async function initViewer(): Promise<void> {
   // Live folder: files added, removed or changed show up without reopening the folder.
   api.fs.onChanged(({ dirPath }) => {
     if (dirPath === getState().currentFolder) void refresh(dirPath)
+  })
+  on('folder:refresh', () => {
+    const folder = getState().currentFolder
+    if (folder) void refresh(folder)
   })
 
   async function refresh(dirPath: string): Promise<void> {

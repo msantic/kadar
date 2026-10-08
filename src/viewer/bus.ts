@@ -5,6 +5,7 @@ export interface BusEvents {
   'lightbox:close': void
   'lightbox:step': { delta: number }
   'toast': { text: string }
+  'folder:refresh': void
 }
 
 type Handler<K extends keyof BusEvents> = (payload: BusEvents[K]) => void

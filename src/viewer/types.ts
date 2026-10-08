@@ -54,6 +54,8 @@ export interface ViewerAPI {
     getRoots: () => Promise<DefaultRoots>
     chooseFolder: () => Promise<string | null>
     revealInFinder: (p: string) => Promise<void>
+    /** Moves files to the Trash. Returns how many moved. */
+    trash: (paths: string[]) => Promise<number>
     openDefault: (p: string) => Promise<string>
     watch: (p: string) => Promise<void>
     unwatch: () => Promise<void>

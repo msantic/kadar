@@ -2,7 +2,10 @@ import { computeLayout, totalHeight, ZOOM_DEFAULT, type GridLayout } from './gri
 import { createCell, assignCell, setCellThumb, positionCell, type CellHandle } from './grid-cell'
 import { ThumbLoader } from './thumb-loader'
 import { subscribe, getState } from '../store'
-import { copySelection, extendTo, selectAll, selectedPaths, selectOnly, toggle } from '../selection'
+import {
+  copySelection, extendTo, openSelectionDefault, selectAll, selectedPaths, selectOnly, toggle, trashSelection,
+} from '../selection'
+import { showContextMenu } from '../context-menu'
 import { updateSession } from '../session'
 import { emit } from '../bus'
 import type { FileEntry } from '../types'
@@ -123,10 +126,14 @@ export function createGrid(): GridHandle {
     const current = selectedIndex()
     if (e.metaKey) {
       const key = e.key.toLowerCase()
-      // Cmd+O or Cmd+Down opens the file in its default app, as in Finder.
+      // Cmd+O or Cmd+Down opens the files in their default apps; Cmd+Delete moves them to the
+      // Trash. Both as in Finder.
       if ((key === 'o' || e.key === 'ArrowDown') && current >= 0) {
         e.preventDefault()
-        void window.viewer.fs.openDefault(entries[current]!.path)
+        openSelectionDefault()
+      } else if (e.key === 'Backspace' && current >= 0) {
+        e.preventDefault()
+        void trashSelection()
       } else if (key === 'a') {
         e.preventDefault()
         selectAll()
@@ -190,7 +197,9 @@ export function createGrid(): GridHandle {
     })
     cell.root.addEventListener('contextmenu', (e) => {
       e.preventDefault()
-      if (cell.entry) void window.viewer.fs.revealInFinder(cell.entry.path)
+      if (!cell.entry) return
+      if (!getState().selection.has(cell.entry.path)) selectOnly(cell.index)
+      void showContextMenu(e.clientX, e.clientY)
     })
     return cell
   }
@@ -198,7 +207,7 @@ export function createGrid(): GridHandle {
   function handleClick(e: MouseEvent, cell: CellHandle): void {
     if (!cell.entry) return
     // As in Finder: click selects, Cmd+click adds or removes, Shift+click selects a range,
-    // double-click opens. Right-click shows the file in Finder.
+    // double-click opens. Right-click opens the file menu.
     if (e.metaKey) toggle(cell.index)
     else if (e.shiftKey) extendTo(cell.index)
     else selectOnly(cell.index)

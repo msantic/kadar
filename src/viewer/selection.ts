@@ -81,3 +81,42 @@ export async function copySelection(asPaths: boolean): Promise<void> {
     emit('toast', { text: `Copy failed: ${String(err)}` })
   }
 }
+
+const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`
+
+/** Cmd+Delete: moves the selected files to the Trash. The live folder then removes them. */
+export async function trashSelection(): Promise<void> {
+  const paths = selectedPaths()
+  if (paths.length === 0) return
+  try {
+    const n = await window.viewer.fs.trash(paths)
+    emit('toast', { text: `Moved ${plural(n, 'file', 'files')} to the Trash` })
+    // Show it at once; the Mac's notice of the change can take a moment.
+    emit('folder:refresh', undefined)
+  } catch (err) {
+    emit('toast', { text: `Move to Trash failed: ${String(err)}` })
+  }
+}
+
+/** Cmd+O: opens the selected files in their default apps. */
+export function openSelectionDefault(): void {
+  for (const path of selectedPaths()) void window.viewer.fs.openDefault(path)
+}
+
+let optimizing = false
+
+/** Web copies of the selected files, with the Optimize tab's settings. */
+export async function optimizeSelection(): Promise<void> {
+  const paths = selectedPaths()
+  if (paths.length === 0 || optimizing) return
+  optimizing = true
+  emit('toast', { text: `Optimizing ${plural(paths.length, 'file', 'files')}…` })
+  try {
+    const n = await window.viewer.share.optimize(paths)
+    emit('toast', { text: `Optimized ${plural(n, 'file', 'files')} → "optimized" folder` })
+  } catch (err) {
+    emit('toast', { text: `Optimize failed: ${String(err)}` })
+  } finally {
+    optimizing = false
+  }
+}
