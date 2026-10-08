@@ -3,7 +3,7 @@
 
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import type { Unsubscribe, ViewerAPI } from '../src/renderer/viewer/types'
+import type { Unsubscribe, ViewerAPI } from './viewer/types'
 
 function subscribe<T>(event: string, cb: (data: T) => void): Unsubscribe {
   let off: (() => void) | null = null

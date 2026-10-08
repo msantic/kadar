@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite'
 
-// Frontend for the Tauri app. Tauri opens the dev server on this fixed port.
+// Kadar's window content. Tauri opens the dev server on this fixed port.
 export default defineConfig({
   root: __dirname,
   clearScreen: false,

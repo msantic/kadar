@@ -1,6 +1,6 @@
 // Kadar window: Viewer and Optimize tabs, running on the Rust backend.
 
-import '../src/renderer/style.css'
+import './style.css'
 import { installCaptureBridge, installViewerBridge } from './bridge'
 import { initOptimize } from './optimize'
 
@@ -30,7 +30,7 @@ function switchTab(tab: string): void {
   // Loaded after the bridge exists: the viewer reads `window.viewer` when its modules load.
   if (tab === 'viewer' && !viewerStarted) {
     viewerStarted = true
-    void import('../src/renderer/viewer').then(({ initViewer }) => initViewer())
+    void import('./viewer').then(({ initViewer }) => initViewer())
   }
   if (tab === 'record' && !recorderStarted) {
     recorderStarted = true
@@ -38,7 +38,7 @@ function switchTab(tab: string): void {
   }
   if (tab === 'screenshot' && !screenshotStarted) {
     screenshotStarted = true
-    void import('../src/renderer/screenshot').then(({ initScreenshot }) => initScreenshot())
+    void import('./screenshot').then(({ initScreenshot }) => initScreenshot())
   }
 }
 

@@ -10,8 +10,8 @@
 # Note: x264 is GPL, so this ffmpeg is GPL. Fine for a personal app; check before selling Kadar.
 set -euo pipefail
 
-APP="$(cd "$(dirname "$0")/.." && pwd)"
-OUT="$APP/src-tauri/bin/ffmpeg-aarch64-apple-darwin"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OUT="$ROOT/src-tauri/bin/ffmpeg-aarch64-apple-darwin"
 FFMPEG_VERSION="7.1.1"
 # Bump when the configure flags change, so existing copies are rebuilt.
 BUILD_ID="2"
@@ -21,7 +21,7 @@ if [ -x "$OUT" ] && [ "$(cat "$STAMP" 2>/dev/null)" = "$BUILD_ID" ] && [ "${1:-}
   exit 0
 fi
 
-WORK="$APP/src-tauri/target/ffmpeg-build"
+WORK="$ROOT/src-tauri/target/ffmpeg-build"
 PREFIX="$WORK/prefix"
 JOBS="$(sysctl -n hw.ncpu)"
 export MACOSX_DEPLOYMENT_TARGET=13.0

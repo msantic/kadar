@@ -1,11 +1,8 @@
 node_modules/
-output/
-out/
 .DS_Store
 .vscode/
-dist
 *.tsbuildinfo
-app/dist
-app/src-tauri/target
-app/src-tauri/gen
-app/src-tauri/bin
+dist/
+src-tauri/target/
+src-tauri/gen/
+src-tauri/bin/

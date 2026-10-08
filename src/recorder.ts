@@ -4,7 +4,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { doResize, el, getSaveDir, hide, persist, setupPresetChange, setupSaveDir, show } from '../src/renderer/shared'
+import { doResize, el, getSaveDir, hide, persist, setupPresetChange, setupSaveDir, show } from './shared'
 
 const WHOLE_SCREEN = '__screen__'
 const SETTINGS_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
