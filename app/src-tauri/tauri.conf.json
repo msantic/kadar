@@ -38,7 +38,8 @@
       "icons/icon.icns"
     ],
     "macOS": {
-      "minimumSystemVersion": "13.0"
+      "minimumSystemVersion": "13.0",
+      "signingIdentity": "Developer ID Application: Prelako d.o.o. (FC2M54RD3H)"
     }
   }
 }
