@@ -159,7 +159,38 @@ export async function initViewer(): Promise<void> {
       truncated: listing.truncated,
       loading: false,
     })
-    const n = listing.files.length
-    countEl.textContent = `${n} ${n === 1 ? 'item' : 'items'}${listing.truncated ? ' (truncated)' : ''}`
+    showCount(listing.files.length, listing.truncated)
+    void api.fs.watch(dirPath)
+  }
+
+  function showCount(n: number, truncated: boolean): void {
+    countEl.textContent = `${n} ${n === 1 ? 'item' : 'items'}${truncated ? ' (truncated)' : ''}`
+  }
+
+  // Live folder: files added, removed or changed show up without reopening the folder.
+  api.fs.onChanged(({ dirPath }) => {
+    if (dirPath === getState().currentFolder) void refresh(dirPath)
+  })
+
+  async function refresh(dirPath: string): Promise<void> {
+    const listing = await api.fs.listFolder(dirPath)
+    const state = getState()
+    if (state.currentFolder !== dirPath) return
+    // Nothing changed that the grid shows: skip, so the view does not redraw for nothing.
+    const old = new Map(state.entries.map((e) => [e.path, e]))
+    const same = listing.files.length === state.entries.length
+      && listing.files.every((f) => old.get(f.path)?.mtimeMs === f.mtimeMs && old.get(f.path)?.size === f.size)
+    if (same) return
+
+    const next = sorted(listing.files)
+    // The selected image may be gone; the open big view follows its image to its new place.
+    const selected = state.selectedPath && next.some((e) => e.path === state.selectedPath) ? state.selectedPath : null
+    const bigViewIndex = state.lightboxIndex !== null && selected ? next.findIndex((e) => e.path === selected) : null
+    setState({ entries: next, folders: listing.folders, truncated: listing.truncated, selectedPath: selected })
+    if (state.lightboxIndex !== null) {
+      if (bigViewIndex !== null && bigViewIndex >= 0) setState({ lightboxIndex: bigViewIndex })
+      else emit('lightbox:close', undefined)
+    }
+    showCount(listing.files.length, listing.truncated)
   }
 }

@@ -50,3 +50,4 @@ impl FolderWatch {
         self.0.lock().unwrap().take();
     }
 }
+

@@ -256,9 +256,12 @@ export function createGrid(): GridHandle {
 
   const unsub = subscribe((s, prev) => {
     if (s.entries !== prev.entries || s.currentFolder !== prev.currentFolder) {
+      // Same folder (files changed or new sort): keep the same image at the top.
+      const sameFolder = s.currentFolder === prev.currentFolder
+      const keepPath = sameFolder ? entries[topIndex]?.path : undefined
       entries = s.entries
-      loader.reset()
-      topIndex = 0
+      if (!sameFolder) loader.reset()
+      topIndex = keepPath ? Math.max(0, entries.findIndex((e) => e.path === keepPath)) : 0
       canvas.style.height = `${totalHeight(entries.length, layout)}px`
       scrollToTop()
       fullRerender()
