@@ -105,6 +105,12 @@ pub fn rename_file(path: String, new_name: String) -> Result<String, String> {
     Ok(dest.to_string_lossy().into_owned())
 }
 
+/// Camera dates for the "Date Taken" sort, in the same order as `files`.
+#[tauri::command(async)]
+pub fn taken_dates(taken: State<'_, crate::taken::TakenDates>, files: Vec<crate::taken::FileStamp>) -> Vec<Option<f64>> {
+    taken.get(files)
+}
+
 /// Files that Finder asked Kadar to open, not yet shown.
 #[derive(Default)]
 pub struct OpenedFiles(pub std::sync::Mutex<Vec<String>>);

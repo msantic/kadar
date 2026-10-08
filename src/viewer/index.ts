@@ -96,12 +96,12 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     const by = sortSelect.value as SortBy
     updateSession({ sortBy: by, sortDescending: defaultDescending(by) })
     drawSortDir()
-    resort()
+    void resort()
   })
   sortDirBtn.addEventListener('click', () => {
     updateSession({ sortDescending: !getSession().sortDescending })
     drawSortDir()
-    resort()
+    void resort()
   })
 
   // Web copies of the selected files, with the Optimize tab's settings.
@@ -134,7 +134,7 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     if (filterTimer !== null) clearTimeout(filterTimer)
     filterTimer = setTimeout(() => {
       updateSession({ filter: filterInput.value })
-      resort()
+      void resort()
     }, 80)
   })
   filterInput.addEventListener('keydown', (e) => {
@@ -143,7 +143,7 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
       if (filterInput.value) {
         filterInput.value = ''
         updateSession({ filter: '' })
-        resort()
+        void resort()
       }
       filterInput.blur()
     } else if (e.key === 'Enter' || e.key === 'ArrowDown') {
@@ -205,7 +205,7 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     if (getSession().filter && !getState().entries.some((e) => e.path === first.path)) {
       filterInput.value = ''
       updateSession({ filter: '' })
-      resort()
+      await resort()
     }
     const index = getState().entries.findIndex((e) => e.path === first.path)
     restoreSelection(items.filter((i) => !i.isDir).map((i) => i.path), first.path, first.path)
@@ -235,10 +235,25 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
   const view = (): FileEntry[] =>
     filterEntries(sortEntries(allFiles, getSession().sortBy, getSession().sortDescending), getSession().filter)
 
+  /** Camera dates are read only when "Date Taken" sorts the grid; later reads come from a cache. */
+  async function ensureTaken(list: FileEntry[]): Promise<void> {
+    if (getSession().sortBy !== 'taken') return
+    const missing = list.filter((e) => e.takenMs === undefined)
+    if (missing.length === 0) return
+    const dates = await api.fs.takenDates(missing.map((e) => ({ path: e.path, mtimeMs: e.mtimeMs })))
+    missing.forEach((e, i) => { e.takenMs = dates[i] ?? null })
+  }
+
   /** New sort order or filter: keep the selected image (or the top one) in view. */
-  function resort(): void {
+  async function resort(): Promise<void> {
     const { selectedPath } = getState()
     if (allFiles.length === 0) return
+    if (getSession().sortBy === 'taken' && allFiles.some((e) => e.takenMs === undefined)) {
+      countEl.textContent = 'Reading camera dates…'
+      const folder = getState().currentFolder
+      await ensureTaken(allFiles)
+      if (getState().currentFolder !== folder) return
+    }
     const keep = selectedPath ?? getSession().topPath
     const next = view()
     setState({ entries: next })
@@ -258,6 +273,8 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     pathEl.textContent = dirPath
     countEl.textContent = 'Loading…'
     const listing = await api.fs.listFolder(dirPath)
+    if (getState().currentFolder !== dirPath) return
+    await ensureTaken(listing.files)
     if (getState().currentFolder !== dirPath) return
     allFiles = listing.files
     setState({
@@ -313,6 +330,8 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
       && listing.files.every((f) => old.get(f.path)?.mtimeMs === f.mtimeMs && old.get(f.path)?.size === f.size)
     if (same) return
 
+    await ensureTaken(listing.files)
+    if (getState().currentFolder !== dirPath) return
     allFiles = listing.files
     const next = view()
     // Selected files may be gone; the open big view follows its image to its new place.

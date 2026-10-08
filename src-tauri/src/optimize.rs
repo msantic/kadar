@@ -14,7 +14,12 @@ use crate::{macos, video};
 
 const OUT_DIR: &str = "optimized";
 
-const IMAGE_EXTS: &[&str] = &["jpg", "jpeg", "png", "heic", "heif", "webp", "tif", "tiff", "bmp", "avif"];
+const IMAGE_EXTS: &[&str] = &[
+    "jpg", "jpeg", "png", "heic", "heif", "webp", "tif", "tiff", "bmp", "avif",
+    // RAW and Photoshop: the Mac decodes them like any other image.
+    "dng", "cr2", "cr3", "crw", "nef", "nrw", "arw", "srf", "sr2", "raf", "orf", "rw2", "rwl",
+    "pef", "srw", "3fr", "iiq", "erf", "mos", "mrw", "x3f", "psd",
+];
 const VIDEO_EXTS: &[&str] = &["mp4", "mov", "m4v", "avi", "mkv", "webm"];
 
 #[derive(Deserialize, Clone, Copy, PartialEq, Eq)]

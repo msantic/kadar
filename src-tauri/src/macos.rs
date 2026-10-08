@@ -17,7 +17,8 @@ use objc2_core_graphics::{
 use objc2_core_media::CMTime;
 use objc2_foundation::{NSString, NSURL};
 use objc2_image_io::{
-    kCGImageDestinationLossyCompressionQuality, kCGImagePropertyOrientation,
+    kCGImagePropertyExifDateTimeDigitized, kCGImagePropertyExifDateTimeOriginal,
+    kCGImagePropertyExifDictionary, kCGImageDestinationLossyCompressionQuality, kCGImagePropertyOrientation,
     kCGImagePropertyPixelHeight, kCGImagePropertyPixelWidth,
     kCGImageSourceCreateThumbnailFromImageAlways, kCGImageSourceCreateThumbnailWithTransform,
     kCGImageSourceShouldCache, kCGImageSourceThumbnailMaxPixelSize, CGImageDestination,
@@ -236,3 +237,55 @@ pub fn png_bytes(path: &Path) -> Option<Vec<u8>> {
     Some(data.to_vec())
 }
 
+
+/// When the photo was taken, from its camera data (EXIF), as milliseconds since 1970.
+/// The camera writes local time without a zone; it is read as this Mac's local time.
+pub fn date_taken_ms(path: &Path) -> Option<f64> {
+    let src = source(path).ok()?;
+    let props = unsafe { src.properties_at_index(0, None) }?;
+    let props: CFRetained<CFDictionary<CFString, CFType>> = unsafe { CFRetained::cast_unchecked(props) };
+    let exif = props.get(unsafe { kCGImagePropertyExifDictionary })?.downcast::<CFDictionary>().ok()?;
+    let exif: CFRetained<CFDictionary<CFString, CFType>> = unsafe { CFRetained::cast_unchecked(exif) };
+    let text = [unsafe { kCGImagePropertyExifDateTimeOriginal }, unsafe { kCGImagePropertyExifDateTimeDigitized }]
+        .iter()
+        .find_map(|key| exif.get(key)?.downcast::<CFString>().ok())?
+        .to_string();
+    parse_exif_date(&text)
+}
+
+/// "2025:01:03 15:47:35" (local time) → milliseconds since 1970.
+fn parse_exif_date(text: &str) -> Option<f64> {
+    let n: Vec<i32> = text
+        .split(|c: char| c == ':' || c == ' ' || c == '-' || c == 'T')
+        .filter(|s| !s.is_empty())
+        .take(6)
+        .map(|s| s.trim().parse().ok())
+        .collect::<Option<_>>()?;
+    let [y, mo, d, h, mi, s] = <[i32; 6]>::try_from(n).ok()?;
+    if y < 1900 || !(1..=12).contains(&mo) || !(1..=31).contains(&d) {
+        return None; // "0000:00:00 00:00:00" and other empty values
+    }
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    tm.tm_year = y - 1900;
+    tm.tm_mon = mo - 1;
+    tm.tm_mday = d;
+    tm.tm_hour = h;
+    tm.tm_min = mi;
+    tm.tm_sec = s;
+    tm.tm_isdst = -1; // let the system decide summer time
+    let secs = unsafe { libc::mktime(&mut tm) };
+    (secs != -1).then_some(secs as f64 * 1000.0)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn exif_dates() {
+        assert!(super::parse_exif_date("2025:01:03 15:47:35").is_some());
+        assert_eq!(super::parse_exif_date("0000:00:00 00:00:00"), None);
+        assert_eq!(super::parse_exif_date("garbage"), None);
+        let a = super::parse_exif_date("2025:01:03 15:47:35").unwrap();
+        let b = super::parse_exif_date("2025:01:03 15:47:45").unwrap();
+        assert_eq!(b - a, 10_000.0);
+    }
+}

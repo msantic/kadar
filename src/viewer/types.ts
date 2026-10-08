@@ -13,6 +13,8 @@ export interface FileEntry {
   size: number
   mtimeMs: number
   createdMs: number
+  /** Camera date, read only for the "Date Taken" sort; null when the file has none. */
+  takenMs?: number | null
 }
 
 export interface FolderListing {
@@ -56,6 +58,8 @@ export interface ViewerAPI {
     revealInFinder: (p: string) => Promise<void>
     /** Moves files to the Trash. Returns how many moved. */
     trash: (paths: string[]) => Promise<number>
+    /** Camera dates for the "Date Taken" sort, in the same order. */
+    takenDates: (files: { path: string; mtimeMs: number }[]) => Promise<(number | null)[]>
     /** Renames a file; returns its new path. */
     rename: (path: string, newName: string) => Promise<string>
     openDefault: (p: string) => Promise<string>

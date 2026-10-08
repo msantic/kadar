@@ -8,6 +8,7 @@ mod macos;
 mod optimize;
 mod protocol;
 mod recorder;
+mod taken;
 mod thumbs;
 mod video;
 mod watch;
@@ -37,6 +38,7 @@ pub fn run() {
                 data_dir.join("thumb-cache"),
             ));
             app.manage(favorites::Favorites::new(data_dir.join("viewer-favorites.json")));
+            app.manage(taken::TakenDates::load(data_dir.join("date-taken-cache.json")));
             app.manage(watch::FolderWatch::default());
             app.manage(recorder::Recorder::default());
             save_window_state_on_change(app.handle());
@@ -50,6 +52,7 @@ pub fn run() {
             commands::reveal_in_finder,
             commands::trash_files,
             commands::rename_file,
+            commands::taken_dates,
             commands::take_opened,
             commands::open_default,
             commands::watch_folder,

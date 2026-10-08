@@ -60,7 +60,18 @@
           "tif",
           "tiff",
           "bmp",
-          "avif"
+          "avif",
+          "dng",
+          "cr2",
+          "cr3",
+          "nef",
+          "arw",
+          "raf",
+          "orf",
+          "rw2",
+          "pef",
+          "srw",
+          "psd"
         ],
         "contentTypes": [
           "public.jpeg",
@@ -71,7 +82,9 @@
           "com.compuserve.gif",
           "public.tiff",
           "com.microsoft.bmp",
-          "public.avif"
+          "public.avif",
+          "public.camera-raw-image",
+          "com.adobe.photoshop-image"
         ],
         "name": "Image",
         "role": "Viewer",

@@ -13,7 +13,19 @@ const IMAGE_EXTS: &[&str] = &[
     "jpg", "jpeg", "png", "webp", "gif", "avif", "bmp", "tif", "tiff", "svg", "heic", "heif",
 ];
 
+// Camera RAW and Photoshop files: the Mac decodes them, the page cannot. The big view gets a
+// JPG copy of them (see protocol.rs).
+const PREVIEW_EXTS: &[&str] = &[
+    "dng", "cr2", "cr3", "crw", "nef", "nrw", "arw", "srf", "sr2", "raf", "orf", "rw2", "rwl",
+    "pef", "srw", "3fr", "iiq", "erf", "mos", "mrw", "x3f", "psd",
+];
+
 const VIDEO_EXTS: &[&str] = &["mp4", "mov", "m4v", "webm"];
+
+/// True for files the page cannot show itself, so the big view needs a JPG copy.
+pub fn needs_preview(name: &str) -> bool {
+    PREVIEW_EXTS.contains(&ext_of(name).as_str())
+}
 
 pub fn ext_of(name: &str) -> String {
     match name.rfind('.') {
@@ -24,7 +36,7 @@ pub fn ext_of(name: &str) -> String {
 
 pub fn kind_of(name: &str) -> Kind {
     let ext = ext_of(name);
-    if IMAGE_EXTS.contains(&ext.as_str()) {
+    if IMAGE_EXTS.contains(&ext.as_str()) || PREVIEW_EXTS.contains(&ext.as_str()) {
         Kind::Image
     } else if VIDEO_EXTS.contains(&ext.as_str()) {
         Kind::Video
