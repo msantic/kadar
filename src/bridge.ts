@@ -3,6 +3,8 @@
 
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { startDrag } from '@crabnebula/tauri-plugin-drag'
+import { optimizePaths } from './optimize'
 import type { Unsubscribe, ViewerAPI } from './viewer/types'
 
 function subscribe<T>(event: string, cb: (data: T) => void): Unsubscribe {
@@ -41,6 +43,10 @@ export function installViewerBridge(): void {
     },
     meta: {
       get: (filePath) => invoke('meta_get', { filePath }),
+    },
+    share: {
+      startDrag: (paths, icon) => startDrag({ item: paths, icon, mode: 'copy' }),
+      optimize:  (paths) => optimizePaths(paths),
     },
     clipboard: {
       copyFiles: (paths) => invoke('copy_files', { paths }),

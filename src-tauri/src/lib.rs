@@ -22,6 +22,8 @@ use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // Drag thumbnails out of the window as real files.
+        .plugin(tauri_plugin_drag::init())
         // Reopens the window at its last size and place.
         .plugin(tauri_plugin_window_state::Builder::default().build())
         // Serves local files to the page as viewer-file://viewer/<absolute path>.

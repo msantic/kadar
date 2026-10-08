@@ -2,7 +2,7 @@ import { computeLayout, totalHeight, ZOOM_DEFAULT, type GridLayout } from './gri
 import { createCell, assignCell, setCellThumb, positionCell, type CellHandle } from './grid-cell'
 import { ThumbLoader } from './thumb-loader'
 import { subscribe, getState } from '../store'
-import { copySelection, extendTo, selectAll, selectOnly, toggle } from '../selection'
+import { copySelection, extendTo, selectAll, selectedPaths, selectOnly, toggle } from '../selection'
 import { updateSession } from '../session'
 import { emit } from '../bus'
 import type { FileEntry } from '../types'
@@ -175,6 +175,18 @@ export function createGrid(): GridHandle {
     cell.root.addEventListener('click', (e) => handleClick(e, cell))
     cell.root.addEventListener('dblclick', () => {
       if (cell.entry) emit('lightbox:open', { index: cell.index })
+    })
+    // Drag out: the selected files when this one is selected, else just this one. The web drag
+    // only starts it; the Mac's own drag carries real files to Finder, browsers and chats.
+    cell.root.draggable = true
+    cell.root.addEventListener('dragstart', (e) => {
+      e.preventDefault()
+      const entry = cell.entry
+      if (!entry) return
+      if (!getState().selection.has(entry.path)) selectOnly(cell.index)
+      const paths = selectedPaths()
+      const icon = loader.getCached(entry.path) ?? (entry.kind === 'image' ? entry.path : '')
+      if (icon) void window.viewer.share.startDrag(paths, icon).catch(() => {})
     })
     cell.root.addEventListener('contextmenu', (e) => {
       e.preventDefault()

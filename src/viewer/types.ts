@@ -73,6 +73,12 @@ export interface ViewerAPI {
   meta: {
     get: (filePath: string) => Promise<FileMetadata>
   }
+  share: {
+    /** Native drag of files out of Kadar, into Finder, a browser or a chat. */
+    startDrag: (paths: string[], icon: string) => Promise<void>
+    /** Web copies with the Optimize tab's settings. Returns how many files it took. */
+    optimize: (paths: string[]) => Promise<number>
+  }
   clipboard: {
     copyFiles: (paths: string[]) => Promise<void>
     copyPaths: (paths: string[]) => Promise<void>

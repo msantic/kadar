@@ -21,6 +21,15 @@ const el = <T extends HTMLElement>(id: string): T => document.getElementById(id)
 interface QueueItem { el: HTMLLIElement; status: string }
 const items = new Map<string, QueueItem>()
 
+let startJob: ((paths: string[]) => Promise<number>) | null = null
+
+/** Optimizes files from elsewhere (the viewer) with this tab's settings; they also show in its list.
+ *  Returns how many files it took. */
+export function optimizePaths(paths: string[]): Promise<number> {
+  if (!startJob) return Promise.reject(new Error('The optimizer is not ready.'))
+  return startJob(paths)
+}
+
 export function initOptimize(isActive: () => boolean): void {
   const dropZone = el('drop-zone')
   const queue = el('queue')
@@ -48,7 +57,7 @@ export function initOptimize(isActive: () => boolean): void {
       dropZone.classList.remove('drag-over')
     } else if (p.type === 'drop') {
       dropZone.classList.remove('drag-over')
-      await start(p.paths)
+      await start(p.paths).catch((err) => console.error('optimize failed:', err))
     }
   })
 
@@ -61,20 +70,19 @@ export function initOptimize(isActive: () => boolean): void {
     summary.textContent = ''
   })
 
-  async function start(paths: string[]): Promise<void> {
+  startJob = start
+
+  async function start(paths: string[]): Promise<number> {
     const files = await invoke<string[]>('optimize_expand', { paths })
-    if (files.length === 0) return
+    if (files.length === 0) return 0
     files.forEach(addToQueue)
     const options = {
       maxWidth: parseInt(el<HTMLSelectElement>('max-width').value, 10),
       imageFormat: imageFormat.value,
       videoPreset: el<HTMLSelectElement>('video-preset').value,
     }
-    try {
-      await invoke('optimize_files', { files, options })
-    } catch (err) {
-      console.error('optimize_files failed:', err)
-    }
+    await invoke('optimize_files', { files, options })
+    return files.length
   }
 
   function onProgress(data: Progress): void {

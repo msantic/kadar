@@ -1,7 +1,7 @@
 import { api } from './ipc'
 import { emit, on } from './bus'
 import { getSession, updateSession } from './session'
-import { restoreSelection } from './selection'
+import { restoreSelection, selectedPaths } from './selection'
 import { defaultDescending, SORT_LABELS, sortEntries, type SortBy } from './sort'
 import type { FileEntry } from './types'
 import { getState, setState, subscribe } from './store'
@@ -89,7 +89,36 @@ export async function initViewer(): Promise<void> {
     resort()
   })
 
-  toolbar.append(openBtn, pathEl, countEl, sortSelect, sortDirBtn, sizeControl)
+  // Web copies of the selected files, with the Optimize tab's settings.
+  const optimizeBtn = document.createElement('button')
+  optimizeBtn.className = 'viewer-ghost-btn viewer-optimize-btn'
+  optimizeBtn.title = 'Make web copies in an "optimized" folder, with the Optimize tab settings'
+  optimizeBtn.hidden = true
+  let optimizing = false
+  optimizeBtn.addEventListener('click', async () => {
+    const paths = selectedPaths()
+    if (paths.length === 0 || optimizing) return
+    optimizing = true
+    optimizeBtn.disabled = true
+    emit('toast', { text: `Optimizing ${paths.length} ${paths.length === 1 ? 'file' : 'files'}…` })
+    try {
+      const n = await window.viewer.share.optimize(paths)
+      emit('toast', { text: `Optimized ${n} ${n === 1 ? 'file' : 'files'} → "optimized" folder` })
+    } catch (err) {
+      emit('toast', { text: `Optimize failed: ${String(err)}` })
+    } finally {
+      optimizing = false
+      optimizeBtn.disabled = false
+    }
+  })
+  subscribe((s, prev) => {
+    if (s.selection === prev.selection && s.selectedPath === prev.selectedPath) return
+    const n = selectedPaths().length
+    optimizeBtn.hidden = n === 0
+    optimizeBtn.textContent = n > 1 ? `Optimize ${n}` : 'Optimize'
+  })
+
+  toolbar.append(openBtn, pathEl, countEl, optimizeBtn, sortSelect, sortDirBtn, sizeControl)
 
   const grid = createGrid()
   const lightbox = createLightbox()
