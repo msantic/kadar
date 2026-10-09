@@ -1,6 +1,8 @@
 # Kadar — notes for AI coding sessions
 
-Read README.md first. Then the guides in `docs/`: [architecture](docs/architecture.md) (how the parts connect), [development](docs/development.md) (commands, checks, build, traps), [decisions](docs/decisions.md) (why), [user guide](docs/user-guide.md) (every feature and key). This file has the rules and traps in short.
+**New session? Read [docs/status.md](docs/status.md) first:** where everything is, the state, open items, and how the owner wants the work done.
+
+Then README.md, then the guides in `docs/`: [architecture](docs/architecture.md) (how the parts connect), [development](docs/development.md) (commands, checks, build, traps), [decisions](docs/decisions.md) (why), [user guide](docs/user-guide.md) (every feature and key). This file has the rules and traps in short.
 
 ## Decisions (do not re-open without the owner asking)
 

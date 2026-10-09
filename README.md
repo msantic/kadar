@@ -14,6 +14,7 @@ Record are not there yet; Linux is on hold. See [Platforms](#platforms-mac-windo
 
 | Guide | For |
 |---|---|
+| [Status and handover](docs/status.md) | Start here in a new session: where everything is, the current state, open items, how the owner works. |
 | [User guide](docs/user-guide.md) | Every feature, key and setting, tab by tab. |
 | [Architecture](docs/architecture.md) | How the Rust side and the window fit together; data on disk; speed design. |
 | [Development](docs/development.md) | Setup, checks, build, install, signing, ffmpeg, known traps, speed measuring. |
