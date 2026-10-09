@@ -11,7 +11,7 @@ use block2::RcBlock;
 use objc2::rc::Retained;
 use objc2::runtime::{Bool, ProtocolObject};
 use objc2::{define_class, msg_send, AllocAnyThread, DefinedClass};
-use objc2_av_foundation::{AVAuthorizationStatus, AVCaptureDevice, AVMediaTypeAudio};
+use objc2_av_foundation::{AVAuthorizationStatus, AVCaptureDevice, AVMediaTypeAudio, AVVideoCodecTypeHEVC};
 use objc2_core_media::CMTime;
 use objc2_foundation::{NSArray, NSError, NSObject, NSObjectProtocol, NSString, NSURL};
 use objc2_screen_capture_kit::{
@@ -19,6 +19,8 @@ use objc2_screen_capture_kit::{
     SCRecordingOutputDelegate, SCShareableContent, SCStream, SCStreamConfiguration, SCWindow,
 };
 use serde::{Deserialize, Serialize};
+
+use tauri::Emitter;
 
 use crate::video;
 
@@ -83,6 +85,13 @@ pub fn microphone_access() -> &'static str {
 
 type Done = Result<(), String>;
 
+/// For messages from the recording delegate to the window.
+static APP: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
+
+pub fn set_app(app: tauri::AppHandle) {
+    let _ = APP.set(app);
+}
+
 define_class!(
     // SAFETY: NSObject has no subclassing rules, and this class does not implement Drop.
     #[unsafe(super(NSObject))]
@@ -95,7 +104,12 @@ define_class!(
     unsafe impl SCRecordingOutputDelegate for RecordingDelegate {
         #[unsafe(method(recordingOutput:didFailWithError:))]
         fn did_fail(&self, _output: &SCRecordingOutput, error: &NSError) {
-            self.report(Err(error.localizedDescription().to_string()));
+            let message = error.localizedDescription().to_string();
+            // Tell the window at once, not only at Stop, so it does not show a recording that is not.
+            if let Some(app) = APP.get() {
+                let _ = app.emit("record-failed", message.clone());
+            }
+            self.report(Err(message));
         }
 
         #[unsafe(method(recordingOutputDidFinishRecording:))]
@@ -249,6 +263,11 @@ impl Recorder {
         let delegate = RecordingDelegate::new(tx);
         let output = unsafe {
             let out_config = SCRecordingOutputConfiguration::new();
+            // HEVC, not the default H.264: H.264 stops at about 4K, so a full 5K screen (or a wide
+            // window on it) failed at the first frame. The final MP4 is made from this file anyway.
+            if let Some(hevc) = AVVideoCodecTypeHEVC {
+                out_config.setVideoCodecType(hevc);
+            }
             out_config.setOutputURL(&NSURL::fileURLWithPath(&NSString::from_str(&capture.to_string_lossy())));
             SCRecordingOutput::initWithConfiguration_delegate(
                 SCRecordingOutput::alloc(),
@@ -284,37 +303,53 @@ fn finish(capture: &PathBuf, base: &PathBuf, opts: &RecordOptions, progress: &dy
         ("18", "medium", "192k", "")
     };
     let dest = PathBuf::from(format!("{}{suffix}.mp4", base.to_string_lossy()));
-    // Loudness leveling works at 192 kHz internally; bring it back to 48 kHz for AAC.
-    let level = "loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000";
+    let tracks = video::audio_track_count(capture);
 
-    let mut args: Vec<String> = ["-c:v", "libx264", "-crf", crf, "-preset", preset, "-pix_fmt", "yuv420p"]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-    // The Mac sends frames only when the picture changes. Editors want a fixed frame rate.
-    if opts.raw_output {
-        args.extend(["-fps_mode", "cfr", "-r", "60"].map(String::from));
-    }
-    match video::audio_track_count(capture) {
-        0 => args.extend(["-map", "0:v:0", "-an"].map(String::from)),
-        1 => {
-            args.extend(["-map", "0:v:0", "-map", "0:a:0"].map(String::from));
-            if opts.normalize_audio {
-                args.extend(["-af".into(), level.into()]);
+    let args = |level_audio: bool| -> Vec<String> {
+        // Loudness leveling works at 192 kHz internally; bring it back to 48 kHz for AAC.
+        let level = "loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000";
+        let mut args: Vec<String> = ["-c:v", "libx264", "-crf", crf, "-preset", preset, "-pix_fmt", "yuv420p"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        // The Mac sends frames only when the picture changes. Editors want a fixed frame rate.
+        if opts.raw_output {
+            args.extend(["-fps_mode", "cfr", "-r", "60"].map(String::from));
+        }
+        match tracks {
+            0 => args.extend(["-map", "0:v:0", "-an"].map(String::from)),
+            1 => {
+                args.extend(["-map", "0:v:0", "-map", "0:a:0"].map(String::from));
+                if level_audio {
+                    args.extend(["-af".into(), level.into()]);
+                }
+            }
+            _ => {
+                let mut mix = "[0:a:0][0:a:1]amix=inputs=2:duration=longest:normalize=0".to_string();
+                if level_audio {
+                    mix = format!("{mix},{level}");
+                }
+                args.extend(["-filter_complex".into(), format!("{mix}[a]"), "-map".into(), "0:v:0".into(), "-map".into(), "[a]".into()]);
             }
         }
-        _ => {
-            let mut mix = "[0:a:0][0:a:1]amix=inputs=2:duration=longest:normalize=0".to_string();
-            if opts.normalize_audio {
-                mix = format!("{mix},{level}");
-            }
-            args.extend(["-filter_complex".into(), format!("{mix}[a]"), "-map".into(), "0:v:0".into(), "-map".into(), "[a]".into()]);
-        }
-    }
-    args.extend(["-c:a", "aac", "-b:a", audio_rate, "-movflags", "+faststart"].map(String::from));
+        args.extend(["-c:a", "aac", "-b:a", audio_rate, "-movflags", "+faststart"].map(String::from));
+        args
+    };
+    let run = |level_audio: bool| -> Result<(), String> {
+        let a = args(level_audio);
+        let refs: Vec<&std::ffi::OsStr> = a.iter().map(std::ffi::OsStr::new).collect();
+        video::encode(capture, &dest, &refs, progress)
+    };
 
-    let refs: Vec<&std::ffi::OsStr> = args.iter().map(std::ffi::OsStr::new).collect();
-    video::encode(capture, &dest, &refs, progress)?;
+    // Leveling a silent track (system sound on, nothing playing) breaks the AAC encoder.
+    // Silence needs no leveling: then make the file again without it.
+    let leveled = opts.normalize_audio && tracks > 0;
+    if let Err(first) = run(leveled) {
+        if !leveled {
+            return Err(first);
+        }
+        run(false)?;
+    }
     let _ = std::fs::remove_file(capture);
     Ok(dest.to_string_lossy().into_owned())
 }

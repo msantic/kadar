@@ -118,6 +118,34 @@ pub fn export_image(app: AppHandle, path: String, options: crate::export::Export
     crate::export::export(&path, &options, &dir)
 }
 
+/// Exports many images with the same settings. Reports "export-progress" { run, done, total }.
+/// A newer `run` stops an older one.
+#[tauri::command(async)]
+pub fn export_batch(
+    app: AppHandle,
+    paths: Vec<String>,
+    options: crate::export::ExportOptions,
+    run: u64,
+) -> Result<Vec<crate::export::BatchItem>, String> {
+    use tauri::Emitter;
+    let dir = app.path().app_cache_dir().map_err(|e| e.to_string())?.join("export-batch");
+    crate::export::export_batch(&paths, &options, &dir, run, &|done, total| {
+        let _ = app.emit("export-progress", serde_json::json!({ "run": run, "done": done, "total": total }));
+    })
+}
+
+/// Copies many export results to the clipboard as files.
+#[tauri::command(async)]
+pub fn export_copy_many(app: AppHandle, results: Vec<String>) -> Result<(), String> {
+    clipboard::copy_files(&app, results)
+}
+
+/// Saves results next to their sources ("optimized" folders). Pairs are [source, result].
+#[tauri::command(async)]
+pub fn export_save_many(pairs: Vec<(String, String)>) -> Result<Vec<String>, String> {
+    pairs.iter().map(|(source, result)| crate::export::save_next_to(source, result)).collect()
+}
+
 /// Saves an export result into the "optimized" folder next to the source. Returns its path.
 #[tauri::command(async)]
 pub fn export_save(source: String, result: String) -> Result<String, String> {

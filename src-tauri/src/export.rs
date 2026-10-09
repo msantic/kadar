@@ -2,8 +2,11 @@
 //! Every change of a setting makes the real result (into a temp file), so the window shows the
 //! exact size and, on request, the compressed picture. Copy and Save reuse that result.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Mutex;
+use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
@@ -36,6 +39,9 @@ pub struct ExportOptions {
     pub format: optimize::ImageFormat,
     /// 1..100, for WebP and JPG.
     pub quality: u8,
+    /// Without `crop`: cut this width/height shape from the center (batch export). None keeps all.
+    #[serde(default)]
+    pub aspect: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -86,7 +92,7 @@ fn render(image: &CGImage, opts: &ExportOptions) -> Result<Rgba, String> {
     let (iw, ih) = (CGImage::width(Some(image)) as f64, CGImage::height(Some(image)) as f64);
     let odd = opts.turns % 2 == 1;
     let (rw, rh) = if odd { (ih, iw) } else { (iw, ih) };
-    let c = opts.crop.unwrap_or(Crop { x: 0.0, y: 0.0, w: 1.0, h: 1.0 });
+    let c = opts.crop.unwrap_or_else(|| centered(rw, rh, opts.aspect));
     let cx = (c.x.clamp(0.0, 1.0) * rw).round();
     let cy = (c.y.clamp(0.0, 1.0) * rh).round();
     let cw = (c.w.clamp(0.0, 1.0) * rw).round().clamp(1.0, rw - cx);
@@ -143,6 +149,63 @@ fn ext(format: optimize::ImageFormat) -> &'static str {
     }
 }
 
+/// The largest centered part with the shape `aspect` (width / height), as fractions.
+fn centered(rw: f64, rh: f64, aspect: Option<f64>) -> Crop {
+    let Some(r) = aspect.filter(|r| *r > 0.0) else { return Crop { x: 0.0, y: 0.0, w: 1.0, h: 1.0 } };
+    let (mut w, mut h) = (rw, rw / r);
+    if h > rh {
+        h = rh;
+        w = rh * r;
+    }
+    Crop { x: (rw - w) / 2.0 / rw, y: (rh - h) / 2.0 / rh, w: w / rw, h: h / rh }
+}
+
+fn encode(pixels: Rgba, opts: &ExportOptions) -> Result<Vec<u8>, String> {
+    let q = opts.quality.clamp(1, 100) as f32;
+    match opts.format {
+        optimize::ImageFormat::Webp => Ok(optimize::encode_webp(&pixels, q)),
+        optimize::ImageFormat::Jpg => optimize::encode_jpeg_q(&pixels, q),
+        optimize::ImageFormat::Png => optimize::encode_png(pixels, 2),
+    }
+}
+
+/// Empties the results folder and makes a new subfolder for this run. A new folder name each
+/// time, so the window never shows an older result from its cache.
+fn fresh_run_dir(dir: &Path) -> Result<PathBuf, String> {
+    if let Ok(read) = std::fs::read_dir(dir) {
+        for entry in read.flatten() {
+            let p = entry.path();
+            let _ = if p.is_dir() { std::fs::remove_dir_all(&p) } else { std::fs::remove_file(&p) };
+        }
+    }
+    let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let run = dir.join(stamp.to_string());
+    std::fs::create_dir_all(&run).map_err(|e| e.to_string())?;
+    Ok(run)
+}
+
+/// `photos/My Photo.HEIC` → `my-photo.webp`; a second "my-photo" in the same run gets "-2".
+fn result_name(source: &str, format: optimize::ImageFormat, taken: &Mutex<HashSet<String>>) -> String {
+    let stem = Path::new(source).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let base = match slug::slugify(&stem) {
+        s if s.is_empty() => "image".to_string(),
+        s => s,
+    };
+    let mut taken = taken.lock().unwrap_or_else(|e| e.into_inner());
+    let mut name = format!("{base}.{}", ext(format));
+    let mut n = 2;
+    while !taken.insert(name.clone()) {
+        name = format!("{base}-{n}.{}", ext(format));
+        n += 1;
+    }
+    name
+}
+
+fn write(path: &Path, bytes: &[u8], width: u32, height: u32) -> Result<ExportResult, String> {
+    std::fs::write(path, bytes).map_err(|e| e.to_string())?;
+    Ok(ExportResult { width, height, bytes: bytes.len() as u64, path: path.to_string_lossy().into_owned() })
+}
+
 /// Makes the result into `dir` and returns its size. Old results there are removed.
 pub fn export(path: &str, opts: &ExportOptions, dir: &Path) -> Result<ExportResult, String> {
     let pixels = {
@@ -151,27 +214,69 @@ pub fn export(path: &str, opts: &ExportOptions, dir: &Path) -> Result<ExportResu
         render(d.frame.image(), opts)?
     };
     let (width, height) = (pixels.width, pixels.height);
-    let q = opts.quality.clamp(1, 100) as f32;
-    let bytes = match opts.format {
-        optimize::ImageFormat::Webp => optimize::encode_webp(&pixels, q),
-        optimize::ImageFormat::Jpg => optimize::encode_jpeg_q(&pixels, q)?,
-        optimize::ImageFormat::Png => optimize::encode_png(pixels, 2)?,
-    };
+    let bytes = encode(pixels, opts)?;
+    let run = fresh_run_dir(dir)?;
+    let out = run.join(result_name(path, opts.format, &Mutex::new(HashSet::new())));
+    write(&out, &bytes, width, height)
+}
 
-    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    if let Ok(read) = std::fs::read_dir(dir) {
-        for entry in read.flatten() {
-            let _ = std::fs::remove_file(entry.path());
+/// The latest batch run; an older run stops at its next file.
+static BATCH_RUN: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Serialize)]
+pub struct BatchItem {
+    pub source: String,
+    pub result: Option<ExportResult>,
+    pub error: Option<String>,
+}
+
+/// Exports many images with the same settings, on all cores. `progress(done, total)` follows
+/// each file. A newer run (another `run` number) stops this one; its results are then None.
+pub fn export_batch(
+    paths: &[String],
+    opts: &ExportOptions,
+    dir: &Path,
+    run: u64,
+    progress: &(dyn Fn(usize, usize) + Sync),
+) -> Result<Vec<BatchItem>, String> {
+    BATCH_RUN.store(run, Ordering::SeqCst);
+    let run_dir = fresh_run_dir(dir)?;
+    let names = Mutex::new(HashSet::new());
+    let next = AtomicUsize::new(0);
+    let done = AtomicUsize::new(0);
+    let results: Mutex<Vec<Option<Result<ExportResult, String>>>> = Mutex::new((0..paths.len()).map(|_| None).collect());
+    let workers = thread::available_parallelism().map(|n| n.get()).unwrap_or(4).min(paths.len().max(1));
+    thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| loop {
+                if BATCH_RUN.load(Ordering::SeqCst) != run {
+                    break;
+                }
+                let i = next.fetch_add(1, Ordering::Relaxed);
+                let Some(path) = paths.get(i) else { break };
+                let one = (|| {
+                    let (w, h) = macos::image_size(Path::new(path)).ok_or("cannot read image")?;
+                    let frame = macos::image_thumbnail(Path::new(path), w.max(h))?;
+                    let pixels = render(frame.image(), opts)?;
+                    let (pw, ph) = (pixels.width, pixels.height);
+                    let bytes = encode(pixels, opts)?;
+                    write(&run_dir.join(result_name(path, opts.format, &names)), &bytes, pw, ph)
+                })();
+                results.lock().unwrap()[i] = Some(one);
+                progress(done.fetch_add(1, Ordering::Relaxed) + 1, paths.len());
+            });
         }
-    }
-    // A new name each time, so the window never shows an older result from its cache.
-    let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
-    let stem = Path::new(path).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    let name = slug::slugify(&stem);
-    let out = dir.join(stamp.to_string()).join(format!("{}.{}", if name.is_empty() { "image" } else { &name }, ext(opts.format)));
-    std::fs::create_dir_all(out.parent().unwrap()).map_err(|e| e.to_string())?;
-    std::fs::write(&out, &bytes).map_err(|e| e.to_string())?;
-    Ok(ExportResult { width, height, bytes: bytes.len() as u64, path: out.to_string_lossy().into_owned() })
+    });
+    let results = results.into_inner().unwrap();
+    Ok(paths
+        .iter()
+        .zip(results)
+        .map(|(source, r)| match r {
+            Some(Ok(result)) => BatchItem { source: source.clone(), result: Some(result), error: None },
+            Some(Err(e)) => BatchItem { source: source.clone(), result: None, error: Some(e) },
+            None => BatchItem { source: source.clone(), result: None, error: Some("stopped".into()) },
+        })
+        .collect())
 }
 
 /// Copies a result into the "optimized" folder next to the source; never overwrites.
@@ -206,7 +311,7 @@ mod tests {
     }
 
     fn opts(turns: u8, crop: Option<super::Crop>, max_width: Option<u32>, format: crate::optimize::ImageFormat) -> super::ExportOptions {
-        super::ExportOptions { turns, crop, max_width, format, quality: 80 }
+        super::ExportOptions { turns, crop, max_width, format, quality: 80, aspect: None }
     }
 
     #[test]
@@ -244,5 +349,32 @@ mod tests {
         let b = super::save_next_to(&src.to_string_lossy(), &result.to_string_lossy()).unwrap();
         assert!(a.ends_with("optimized/photo.webp"));
         assert!(b.ends_with("optimized/photo-2.webp"));
+    }
+
+    #[test]
+    fn batch_exports_all_with_a_centered_shape_and_unique_names() {
+        use crate::optimize::ImageFormat::Webp;
+        let dir = crate::testutil::temp_dir("export-batch");
+        let wide = dir.join("photo.png");
+        let tall = dir.join("photo.jpg"); // same name stem as photo.png
+        crate::testutil::write_png(&wide, 400, 200);
+        crate::testutil::write_png(&tall, 200, 400);
+        let paths = vec![wide.to_string_lossy().into_owned(), tall.to_string_lossy().into_owned()];
+        let mut o = opts(0, None, Some(100), Webp);
+        o.aspect = Some(1.0);
+        let calls = std::sync::atomic::AtomicUsize::new(0);
+        let items = super::export_batch(&paths, &o, &dir.join("out"), 7, &|_, total| {
+            assert_eq!(total, 2);
+            calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        })
+        .unwrap();
+        assert_eq!(calls.into_inner(), 2);
+        for item in &items {
+            let r = item.result.as_ref().expect("exported");
+            assert_eq!((r.width, r.height), (100, 100), "square from the center, scaled to 100");
+        }
+        let names: std::collections::HashSet<_> = items.iter().map(|i| i.result.as_ref().unwrap().path.clone()).collect();
+        assert_eq!(names.len(), 2, "no name is used twice");
+        assert!(names.iter().any(|n| n.ends_with("/photo-2.webp")), "the second photo gets -2");
     }
 }

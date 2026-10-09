@@ -46,6 +46,7 @@ pub fn run() {
             app.manage(taken::TakenDates::load(data_dir.join("date-taken-cache.json")));
             app.manage(watch::FolderWatch::default());
             app.manage(recorder::Recorder::default());
+            recorder::set_app(app.handle().clone());
             save_window_state_on_change(app.handle());
             Ok(())
         })
@@ -61,6 +62,9 @@ pub fn run() {
             commands::export_image,
             commands::image_properties,
             commands::export_save,
+            commands::export_batch,
+            commands::export_copy_many,
+            commands::export_save_many,
             commands::export_copy,
             commands::take_opened,
             commands::open_default,

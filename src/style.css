@@ -777,3 +777,14 @@ input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   opacity: 0.35;
 }
+
+/* Record tab: error line above the record button */
+.record-error {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-radius: var(--r-sm);
+  background: rgba(255, 69, 58, 0.12);
+  border: 1px solid rgba(255, 69, 58, 0.35);
+  color: var(--error);
+  font-size: 12px;
+}

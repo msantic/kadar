@@ -44,9 +44,24 @@ export async function initRecorder(): Promise<void> {
     if (path) void invoke('reveal_in_finder', { path })
   })
 
+  // The Mac stopped the recording on its own (for example a failed first frame).
+  void listen<string>('record-failed', (e) => {
+    stopTimer()
+    hide('record-active')
+    show('record-idle')
+    showError(`Recording stopped: ${e.payload}`)
+    void invoke('record_stop').catch(() => {})
+  })
+
   void listen<number>('record-progress', (e) => {
     el('stop-btn').textContent = `Saving… ${e.payload}%`
   })
+}
+
+/** Errors show in the Record tab itself; the page cannot rely on pop-up alerts. */
+function showError(text: string): void {
+  el('record-error').textContent = text
+  show('record-error')
 }
 
 async function checkScreenAccess(): Promise<boolean> {
@@ -120,10 +135,11 @@ async function start(): Promise<void> {
     if (!(await checkScreenAccess())) return
     const micId = el<HTMLSelectElement>('mic-select').value
     if (micId && (await invoke<string>('record_mic_access')) !== 'granted') {
-      alert('Kadar cannot use the microphone. Allow it in System Settings → Privacy & Security → Microphone.')
+      showError('Kadar cannot use the microphone. Allow it in System Settings → Privacy & Security → Microphone.')
       return
     }
     hide('record-result')
+    hide('record-error')
     await countdown()
     await invoke('record_start', {
       options: {
@@ -139,7 +155,7 @@ async function start(): Promise<void> {
     show('record-active')
     startTimer()
   } catch (err) {
-    alert(`Recording failed: ${String(err)}`)
+    showError(`Recording failed: ${String(err)}`)
   } finally {
     busy = false
   }
@@ -158,7 +174,7 @@ async function stop(): Promise<void> {
     el<HTMLButtonElement>('show-result-btn').dataset['path'] = path
     show('record-result')
   } catch (err) {
-    alert(`Saving failed: ${String(err)}`)
+    showError(`Saving failed: ${String(err)}`)
   } finally {
     hide('record-active')
     show('record-idle')
