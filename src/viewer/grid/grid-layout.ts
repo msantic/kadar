@@ -1,3 +1,7 @@
+// Grid geometry: how many columns fit, cell size and row height. All values in CSS px.
+// Pure math; grid.ts uses it to place cells and size the scroll area.
+
+/** Sizes in CSS px. `cellHeight` includes the file name line; `rowHeight` adds the gap. */
 export interface GridLayout {
   columns: number
   cellWidth: number
@@ -23,6 +27,7 @@ export function computeLayout(containerWidth: number, targetCell: number): GridL
   }
 }
 
+/** Height in px of the whole grid for `count` cells, with a gap at the bottom. */
 export function totalHeight(count: number, layout: GridLayout): number {
   const rows = Math.ceil(count / layout.columns)
   return rows * layout.rowHeight + layout.gap
@@ -30,5 +35,7 @@ export function totalHeight(count: number, layout: GridLayout): number {
 
 // Zoom slider range
 export const ZOOM_MIN = 80
+/** Largest target cell width, in px. */
 export const ZOOM_MAX = 320
+/** Target cell width in px before the user zooms. */
 export const ZOOM_DEFAULT = 160

@@ -1,6 +1,7 @@
 // Test helper: a file entry with sensible defaults.
 import type { FileEntry } from './types'
 
+/** A file in /photos named `name`; `extra` overrides any field. The extension comes from the name. */
 export function entry(name: string, extra: Partial<FileEntry> = {}): FileEntry {
   return {
     name,

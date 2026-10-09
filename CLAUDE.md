@@ -1,6 +1,6 @@
 # Kadar — notes for AI coding sessions
 
-Read README.md first: it has what Kadar does and which file does what. This file has the rules and traps.
+Read README.md first. Then the guides in `docs/`: [architecture](docs/architecture.md) (how the parts connect), [development](docs/development.md) (commands, checks, build, traps), [decisions](docs/decisions.md) (why), [user guide](docs/user-guide.md) (every feature and key). This file has the rules and traps in short.
 
 ## Decisions (do not re-open without the owner asking)
 
@@ -14,13 +14,16 @@ Read README.md first: it has what Kadar does and which file does what. This file
 - `npm run dev` — run with live reload. `npm run build` — signed `.app` and `.dmg` in `src-tauri/target/release/bundle/`.
 - Rust tools are in `~/.cargo/bin`, which is not on the agent shell PATH. The npm scripts add it. For cargo directly, call `~/.cargo/bin/cargo` (run it in `src-tauri/`).
 - Kadar is installed in /Applications. To update it: `npm run build`, then `ditto src-tauri/target/release/bundle/macos/Kadar.app /Applications/Kadar.app` (quit Kadar first). Finder's "Open With" uses that copy.
-- `npm run check` runs all checks: types, the window checks (`src/**/*.test.ts`, vitest) and the Rust checks (`cargo test`). `npm run build` runs them first and stops on a failure. Add a check with every new behavior. `cargo build` must stay free of warnings.
+- `npm run check` runs all checks: types, the window checks (`src/**/*.test.ts`, vitest), the docs check (`scripts/check-docs.mjs`), clippy with warnings as errors, and the Rust checks (`cargo test`). `npm run build` runs them first and stops on a failure. Add a check with every new behavior and every bug fix.
+- **Documentation is required.** Every new code file starts with a header comment; every exported TS item and `pub` Rust item gets a doc comment (the docs check enforces both). Update `docs/user-guide.md` when the user sees a change, `docs/architecture.md` when parts connect differently, `docs/decisions.md` for a lasting choice.
+- Video checks need the bundled ffmpeg in `src-tauri/bin/` (git-ignored): run `scripts/build-ffmpeg.sh` once on a fresh clone.
 - Rust checks make their own folders and images (`testutil.rs`); never point a check at the owner's files.
 
 ## How the parts connect
 
 - The window code (`src/`) calls Rust commands with `invoke('name', { camelCaseArgs })`. Every command is in `src-tauri/src/commands.rs` and listed in `lib.rs`.
-- The viewer and screenshot screens were written for Electron. `src/bridge.ts` gives them the same `window.viewer` / `window.optimizer` objects, backed by Rust. Keep that shape, or change the screens and the bridge together.
+- `src/bridge.ts` gives the viewer and the Screenshot tab the `window.viewer` / `window.optimizer` objects, backed by Rust commands and events. Keep that shape, or change the screens and the bridge together.
+- Errors must be visible: a message in the tab (Optimize, Record, Screenshot) or the viewer's message line. No `alert()`, no console-only errors. Locks use `crate::sync::lock` (survives a panic elsewhere).
 - Local files reach the window as `viewer-file://viewer/<percent-encoded path>`, served by `protocol.rs`.
 - Long work reports progress as events: `viewer:thumb:ready`, `file-progress`, `record-progress`.
 

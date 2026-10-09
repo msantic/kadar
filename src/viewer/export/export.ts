@@ -1,11 +1,14 @@
 // "Export for web" of one image. Left: the image with a crop frame. Right: rotate, crop shape,
 // width, format and quality. Every change makes the real result in Rust, so the size shown is
-// exact, and "Show result" shows the compressed picture itself. Copy or Save uses that result.
+// exact, and the Result and Compare views show the compressed picture itself. Copy or Save uses
+// that result. With several images (batch), the same settings go to all and a sheet shows the results.
+// Opens on the bus event `export:open`.
 
 import { on, emit } from '../bus'
 import { fileUrl } from '../ipc'
 import { getState } from '../store'
 import type { BatchItem, ExportOptions, ExportResult } from '../types'
+import { formatBytes, savingPercent } from '../format'
 
 interface Rect { x: number; y: number; w: number; h: number }
 type Handle = 'move' | 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
@@ -31,12 +34,6 @@ function saveSettings(s: Settings): void {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)) } catch { /* not kept */ }
 }
 
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
-  return `${(n / 1024 / 1024).toFixed(1)} MB`
-}
-
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag)
   if (cls) e.className = cls
@@ -50,6 +47,14 @@ function labeled(label: string, control: HTMLElement): HTMLElement {
   return row
 }
 
+let exportOpen = false
+
+/** True while Export for Web is in front. Menu commands for the grid wait until it closes. */
+export function isExportOpen(): boolean {
+  return exportOpen
+}
+
+/** Builds the Export for Web screen, hidden until `export:open`. Settings are kept between launches. */
 export function createExport(): HTMLElement {
   const settings = loadSettings()
 
@@ -300,6 +305,8 @@ export function createExport(): HTMLElement {
 
   // ─── Batch ─────────────────────────────────────────────────────────────────
   let batch: string[] = []
+  /** Size in bytes of each source file of the batch, for the "smaller" figure. */
+  let batchSizes = new Map<string, number>()
   let batchItems: BatchItem[] = []
   let currentRun = 0
   window.viewer.share.onExportProgress(({ run, done, total }) => {
@@ -317,7 +324,9 @@ export function createExport(): HTMLElement {
       batchItems = items
       const done = items.filter((i) => i.result)
       const total = done.reduce((sum, i) => sum + i.result!.bytes, 0)
-      const saving = sourceSize > 0 ? Math.min(99, Math.floor((1 - total / sourceSize) * 100)) : 0
+      // Compare with the sources that worked only, so failed images do not inflate the saving.
+      const doneSource = done.reduce((sum, i) => sum + (batchSizes.get(i.source) ?? 0), 0)
+      const saving = savingPercent(doneSource, total)
       const failed = items.length - done.length
       info.textContent = `${done.length} images  ·  ${formatBytes(total)} total${saving > 0 ? `  ·  ${saving}% smaller` : ''}`
         + (failed > 0 ? `  ·  ${failed} failed` : '')
@@ -351,7 +360,7 @@ export function createExport(): HTMLElement {
       const r = await window.viewer.share.exportImage(path, options())
       if (mine !== requestNo) return
       latest = r
-      const saving = sourceSize > 0 ? Math.min(99, Math.floor((1 - r.bytes / sourceSize) * 100)) : 0
+      const saving = savingPercent(sourceSize, r.bytes)
       info.textContent = `${r.width} × ${r.height}  ·  ${formatBytes(r.bytes)}${saving > 0 ? `  ·  ${saving}% smaller` : ''}`
       if (view === 'result') result.src = fileUrl(r.path)
       if (view === 'compare') {
@@ -493,12 +502,14 @@ export function createExport(): HTMLElement {
     else if (e.metaKey && e.key.toLowerCase() === 'c') { e.preventDefault(); void copy() }
     else if (e.metaKey && e.key.toLowerCase() === 's') { e.preventDefault(); void save() }
     else if (!typing && !e.metaKey && batch.length <= 1 && e.key.toLowerCase() === 'r') { e.preventDefault(); rotRight.click() }
-    else return
+    // Every other key also stops here, so the arrows, Space or I do not act on the screens
+    // behind. Fields still get their keys: this stops only the page's own key handlers.
     e.stopImmediatePropagation()
   }, { capture: true })
 
   function close(): void {
     root.hidden = true
+    exportOpen = false
     img.removeAttribute('src')
     result.removeAttribute('src')
     cmpResult.removeAttribute('src')
@@ -510,7 +521,7 @@ export function createExport(): HTMLElement {
     requestNo++
   }
 
-  /** Single mode: rotate, free crop and "Show result"; batch mode: the results sheet. */
+  /** Single mode: rotate, free crop and the Crop / Result / Compare views; batch mode: the results sheet. */
   function setMode(many: boolean): void {
     title.textContent = many ? `Export ${batch.length} Images for Web` : 'Export for Web'
     rotateRow.hidden = many
@@ -536,19 +547,23 @@ export function createExport(): HTMLElement {
     qualityRow.hidden = format.value === 'png'
     source.textContent = `${p.split('/').pop()}  ·  ${formatBytes(size)}`
     root.hidden = false
+    exportOpen = true
     img.onload = () => { fullCrop(); setView('crop'); schedule() }
+    img.onerror = () => { info.textContent = 'Kadar cannot read this image.' }
     img.src = fileUrl(p)
   }
 
   function openBatch(paths: string[]): void {
     batch = paths
     const sizes = new Map(getState().entries.map((e) => [e.path, e.size]))
+    batchSizes = new Map(paths.map((p) => [p, sizes.get(p) ?? 0]))
     sourceSize = paths.reduce((sum, p) => sum + (sizes.get(p) ?? 0), 0)
     setMode(true)
     qualityRow.hidden = format.value === 'png'
     source.textContent = `${paths.length} images  ·  ${formatBytes(sourceSize)}`
     sheet.replaceChildren()
     root.hidden = false
+    exportOpen = true
     schedule()
   }
 

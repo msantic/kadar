@@ -1,3 +1,7 @@
+// The sidebar's Locations: a folder tree under Home, Pictures, Desktop, Downloads and Movies.
+// Subfolders load from Rust when a folder first opens. Open folders are kept in the session;
+// the folder shown in the grid is marked.
+
 import { api } from '../ipc'
 import { emit } from '../bus'
 import { getState, subscribe } from '../store'
@@ -16,10 +20,11 @@ interface Node {
 }
 
 // Every row by folder path, to mark the folder shown in the grid.
-const rowsByPath = new Map<string, HTMLElement>()
+const rowsByPath = new Map<string, Set<HTMLElement>>()
 // Folders that are open, kept in the session so they open again on the next start.
 const expanded = new Set<string>(getSession().expanded)
 
+/** Builds the tree. The root folders arrive from Rust a moment later. */
 export function createTree(): HTMLElement {
   const root = document.createElement('ul')
   root.className = 'viewer-tree'
@@ -78,7 +83,10 @@ function makeNode(entry: FolderEntry, depth: number): Node {
   childrenEl.hidden = true
 
   const node: Node = { entry, depth, el: li, row, caret, childrenEl, children: null, expanded: false }
-  rowsByPath.set(entry.path, row)
+  // One folder can show twice (for example Pictures at the top and inside Home): mark both.
+  const rows = rowsByPath.get(entry.path) ?? new Set<HTMLElement>()
+  rows.add(row)
+  rowsByPath.set(entry.path, rows)
 
   row.addEventListener('click', () => emit('folder:request', { path: entry.path }))
   caret.addEventListener('click', (e) => {
@@ -91,8 +99,8 @@ function makeNode(entry: FolderEntry, depth: number): Node {
 }
 
 function markActive(path: string | null): void {
-  for (const row of rowsByPath.values()) row.classList.remove('active')
-  if (path) rowsByPath.get(path)?.classList.add('active')
+  for (const rows of rowsByPath.values()) for (const row of rows) row.classList.remove('active')
+  if (path) for (const row of rowsByPath.get(path) ?? []) row.classList.add('active')
 }
 
 async function setExpanded(node: Node, open: boolean): Promise<void> {

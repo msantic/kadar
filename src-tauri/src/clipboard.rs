@@ -23,6 +23,7 @@ fn on_main<T: Send + 'static>(app: &AppHandle, f: impl FnOnce() -> T + Send + 's
     rx.recv().map_err(|e| e.to_string())
 }
 
+/// Puts the full paths on the clipboard as text, one per line. Waits for the main thread.
 pub fn copy_paths(app: &AppHandle, paths: Vec<String>) -> Result<(), String> {
     let text = paths.join("\n");
     on_main(app, move || {
@@ -34,6 +35,8 @@ pub fn copy_paths(app: &AppHandle, paths: Vec<String>) -> Result<(), String> {
     .ok_or_else(|| "The clipboard did not accept the paths.".into())
 }
 
+/// Puts the files on the clipboard as file links; a single image also goes on as a PNG picture.
+/// Waits for the main thread.
 pub fn copy_files(app: &AppHandle, paths: Vec<String>) -> Result<(), String> {
     // A picture only for one image: a picture of each of many photos would be very large.
     let png = match paths.as_slice() {

@@ -1,3 +1,6 @@
+// The search field's filter: which files of the open folder match the typed words.
+// Pure function, checked in filter.test.ts.
+
 import type { FileEntry } from './types'
 
 /** Lower case, accents removed: "Šuma" matches "suma". */

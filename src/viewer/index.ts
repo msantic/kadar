@@ -1,3 +1,7 @@
+// The Viewer tab: builds the toolbar, sidebar, grid, big view and Export for Web, and owns the
+// open folder (loading, sort, filter, Back/Forward history, live updates from Rust). Also
+// handles menu bar items and shows toasts. main.ts starts it with initViewer.
+
 import { api } from './ipc'
 import { emit, on } from './bus'
 import { getSession, updateSession } from './session'
@@ -5,7 +9,7 @@ import {
   copySelection, exportSelection, openSelectionDefault, optimizeSelection, restoreSelection, selectedPaths, selectOnly,
   trashSelection,
 } from './selection'
-import { createExport } from './export/export'
+import { createExport, isExportOpen } from './export/export'
 import { undoLast } from './undo'
 import { defaultDescending, SORT_LABELS, sortEntries, type SortBy } from './sort'
 import type { FileEntry } from './types'
@@ -15,6 +19,7 @@ import { createSidebar } from './sidebar/sidebar'
 import { createGrid } from './grid/grid'
 import { createLightbox } from './lightbox/lightbox'
 import { ZOOM_MIN, ZOOM_MAX, ZOOM_DEFAULT } from './grid/grid-layout'
+import { readStored, writeStored } from '../storage'
 
 let initialized = false
 
@@ -93,7 +98,7 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
   sizeSlider.className = 'viewer-size-slider'
   sizeSlider.min = String(ZOOM_MIN)
   sizeSlider.max = String(ZOOM_MAX)
-  const saved = localStorage.getItem('persist:viewer-thumb-size')
+  const saved = readStored('persist:viewer-thumb-size')
   sizeSlider.value = saved ?? String(ZOOM_DEFAULT)
 
   const sizeLarge = document.createElement('span')
@@ -178,7 +183,7 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
   sizeSlider.addEventListener('input', () => {
     const val = parseInt(sizeSlider.value, 10)
     grid.setZoom(val)
-    localStorage.setItem('persist:viewer-thumb-size', String(val))
+    writeStored('persist:viewer-thumb-size', String(val))
   })
 
   // Pinch on the trackpad (or ⌘-scroll) in the grid changes the thumbnail size, as in Photos.
@@ -246,10 +251,10 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     }
   })
 
-  // ⌘↑ parent folder, ⌘[ back, ⌘] forward, ⌘Z undo, while the grid is in front. Here, not in the
+  // ⌘Z undo (grid or big view); ⌘↑ parent folder, ⌘[ back, ⌘] forward (grid only). Here, not in the
   // grid: these must work in an empty folder too (for example after moving its last file away).
   window.addEventListener('keydown', (e) => {
-    if (!e.metaKey || e.defaultPrevented || main.offsetParent === null || getState().lightboxIndex !== null) return
+    if (!e.metaKey || e.defaultPrevented || main.offsetParent === null) return
     const t = e.target as HTMLElement | null
     if (t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) return
     if (e.key.toLowerCase() === 'z' && !e.shiftKey) {
@@ -257,6 +262,7 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
       void undoLast()
       return
     }
+    if (getState().lightboxIndex !== null) return
     const to = e.key === 'ArrowUp' ? 'up' : e.key === '[' ? 'back' : e.key === ']' ? 'forward' : null
     if (!to) return
     e.preventDefault()
@@ -334,7 +340,7 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
   /** New sort order or filter: keep the selected image (or the top one) in view. */
   async function resort(): Promise<void> {
     const { selectedPath } = getState()
-    if (allFiles.length === 0) return
+    if (allFiles.length === 0 && allFolders.length === 0) return
     if (getSession().sortBy === 'taken' && allFiles.some((e) => e.takenMs === undefined)) {
       countEl.textContent = 'Reading camera dates…'
       const folder = getState().currentFolder
@@ -413,6 +419,8 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
 
   // Menu bar items (the keys mostly arrive directly; the menu also works with a click).
   on('menu', ({ id }) => {
+    // Export for Web is in front: a key meant for it must not act on the files behind it.
+    if (isExportOpen()) return
     const { entries, selectedPath, lightboxIndex } = getState()
     const focus = selectedPath ?? selectedPaths()[0] ?? null
     const focusEntry = entries.find((e) => e.path === focus)
@@ -434,9 +442,12 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
       case 'rename': emit('rename:start', undefined); break
       case 'trash': void trashSelection(); break
       case 'copy-paths': void copySelection(true); break
-      case 'filter': filterInput.focus(); filterInput.select(); break
+      case 'filter':
+        if (lightboxIndex === null) { filterInput.focus(); filterInput.select() }
+        break
       case 'zoom-in':
       case 'zoom-out': {
+        if (lightboxIndex !== null) { emit('lightbox:zoom', { bigger: id === 'zoom-in' }); break }
         const step = id === 'zoom-in' ? 40 : -40
         sizeSlider.value = String(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Number(sizeSlider.value) + step)))
         sizeSlider.dispatchEvent(new Event('input'))

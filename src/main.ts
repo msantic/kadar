@@ -1,4 +1,4 @@
-// Kadar window: Viewer and Optimize tabs, running on the Rust backend.
+// Kadar window: Viewer, Optimize, Record and Screenshot tabs, running on the Rust backend.
 
 import './style.css'
 import { invoke } from '@tauri-apps/api/core'
@@ -9,6 +9,13 @@ import { initOptimize } from './optimize'
 
 installViewerBridge()
 installCaptureBridge()
+
+// Safety net: an error that no code handles still tells the user, in the viewer's message line.
+window.addEventListener('unhandledrejection', (e) => {
+  const reason: unknown = e.reason
+  const text = reason instanceof Error ? reason.message : String(reason)
+  void import('./viewer/bus').then(({ emit }) => emit('toast', { text: `Something failed: ${text}` }))
+})
 
 const panels: Record<string, HTMLElement> = {
   viewer: document.getElementById('panel-viewer')!,
@@ -58,11 +65,18 @@ initOptimize(() => activeTab === 'optimize')
 let saved: string | null = null
 try { saved = localStorage.getItem('persist:active-tab') } catch { /* private mode */ }
 
+// Commands that are safe to run when they arrive from another tab: they only open or arrange
+// the viewer. Commands on the selected files (Trash, Rename, Export, ...) must not run on a
+// selection the user cannot see, so from another tab they only bring the viewer to the front.
+const SAFE_FROM_OTHER_TABS = /^(open-folder|filter|zoom-in|zoom-out|go:.*|sort:.*)$/
+
 // Menu bar: tabs switch here; everything else is a viewer command, shown in the viewer.
 void listen<string>('menu', (e) => {
   const id = e.payload
   if (id.startsWith('tab:')) { switchTab(id.slice(4)); return }
+  const fromOtherTab = activeTab !== 'viewer'
   switchTab('viewer')
+  if (fromOtherTab && !SAFE_FROM_OTHER_TABS.test(id)) return
   void import('./viewer/bus').then(({ emit }) => emit('menu', { id }))
 })
 

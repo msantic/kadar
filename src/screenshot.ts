@@ -18,6 +18,7 @@ let saveDir = '~/Pictures/Screenshots'
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
+/** Wires the Screenshot tab, the first time it opens: saved settings, permission check, app list. */
 export async function initScreenshot(): Promise<void> {
   saveDir = getSaveDir('screenshot-save-dir', '~/Pictures/Screenshots')
   el('ss-save-dir').textContent = saveDir
@@ -112,6 +113,7 @@ async function captureScreenshot(): Promise<void> {
   btn.textContent = 'Capturing…'
   btn.disabled = true
   hide('ss-result')
+  hide('ss-error')
 
   try {
     const filePath = await window.optimizer.takeScreenshot({
@@ -127,8 +129,9 @@ async function captureScreenshot(): Promise<void> {
     el<HTMLButtonElement>('ss-show-result-btn').dataset['path'] = filePath
     show('ss-result')
   } catch (err) {
-    console.error('takeScreenshot failed:', err)
-    alert(`Screenshot failed: ${(err as Error).message}`)
+    // Errors from the Mac side arrive as plain text, not as Error objects.
+    el('ss-error').textContent = `Screenshot failed: ${err instanceof Error ? err.message : String(err)}`
+    show('ss-error')
   } finally {
     btn.textContent = 'Capture Screenshot'
     btn.disabled = false

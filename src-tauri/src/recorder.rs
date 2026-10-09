@@ -2,7 +2,7 @@
 //! system sound and a microphone. The Mac writes the capture to a file as it records; on stop,
 //! the bundled video tool mixes the audio tracks, optionally levels them, and makes the MP4.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -42,12 +42,14 @@ fn error_text(err: *mut NSError, fallback: &str) -> String {
 
 // ─── Microphones ────────────────────────────────────────────────────────────
 
+/// One microphone: the Mac's device id and its display name.
 #[derive(Serialize)]
 pub struct Microphone {
     id: String,
     name: String,
 }
 
+/// All audio input devices the Mac has (AVFoundation). Empty when there are none.
 #[allow(deprecated)] // The discovery-session API needs a list of device kinds; this one does not.
 pub fn microphones() -> Vec<Microphone> {
     let Some(audio) = (unsafe { AVMediaTypeAudio }) else { return Vec::new() };
@@ -88,6 +90,8 @@ type Done = Result<(), String>;
 /// For messages from the recording delegate to the window.
 static APP: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
 
+/// Gives the recorder the app handle at launch, so a failure mid-recording can reach the window.
+/// Only the first call counts.
 pub fn set_app(app: tauri::AppHandle) {
     let _ = APP.set(app);
 }
@@ -127,7 +131,7 @@ impl RecordingDelegate {
 
     /// The first outcome wins; a failure after a finish (or the reverse) is ignored.
     fn report(&self, outcome: Done) {
-        if let Some(tx) = self.ivars().lock().unwrap().take() {
+        if let Some(tx) = crate::sync::lock(self.ivars()).take() {
             let _ = tx.send(outcome);
         }
     }
@@ -135,6 +139,8 @@ impl RecordingDelegate {
 
 // ─── Recorder ───────────────────────────────────────────────────────────────
 
+/// Recording settings from the window. No `mic_id` (or "") records no microphone.
+/// `raw_output` makes a larger, higher-quality "-raw" file at a fixed 60 fps, for editing.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RecordOptions {
@@ -157,6 +163,7 @@ struct Active {
     opts: RecordOptions,
 }
 
+/// The running recording, if any. Only one recording runs at a time.
 #[derive(Default)]
 pub struct Recorder(Mutex<Option<Shared<Active>>>);
 
@@ -183,20 +190,16 @@ fn wait_for(call: impl FnOnce(&block2::DynBlock<dyn Fn(*mut NSError)>)) -> Resul
     rx.recv_timeout(WAIT).map_err(|_| "macOS did not answer".to_string())?
 }
 
-fn expand_home(dir: &str) -> PathBuf {
-    match dir.strip_prefix('~') {
-        Some(rest) => PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(rest.trim_start_matches('/')),
-        None => PathBuf::from(dir),
-    }
-}
-
 fn even(v: f64) -> usize {
     ((v / 2.0).round() as usize * 2).max(2)
 }
 
 impl Recorder {
+    /// Starts recording into `recording-<ms>-capture.mp4` in the output folder (made when
+    /// missing). Waits up to 15 s for macOS. Error when a recording runs already, the window is
+    /// not found, or Screen Recording is not allowed.
     pub fn start(&self, opts: RecordOptions) -> Result<(), String> {
-        let mut slot = self.0.lock().unwrap();
+        let mut slot = crate::sync::lock(&self.0);
         if slot.is_some() {
             return Err("A recording is already running.".into());
         }
@@ -244,7 +247,7 @@ impl Recorder {
             }
         }
 
-        let dir = expand_home(&opts.output_dir);
+        let dir = crate::capture::expand_home(&opts.output_dir);
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
         let final_base = dir.join(format!("recording-{stamp}"));
@@ -278,7 +281,7 @@ impl Recorder {
 
     /// Stops the capture, then makes the final MP4. Returns its path.
     pub fn stop(&self, progress: &dyn Fn(u32)) -> Result<String, String> {
-        let Shared(active) = self.0.lock().unwrap().take().ok_or("No recording is running.")?;
+        let Shared(active) = crate::sync::lock(&self.0).take().ok_or("No recording is running.")?;
         wait_for(|h| unsafe { active.stream.stopCaptureWithCompletionHandler(Some(h)) })?;
         active.finished.recv_timeout(WAIT).map_err(|_| "The recording did not finish.".to_string())??;
         finish(&active.capture, &active.final_base, &active.opts, progress)
@@ -287,7 +290,7 @@ impl Recorder {
 
 /// Capture file → final MP4. System sound and microphone arrive as separate tracks; they are
 /// mixed into one, so every player and editor hears both.
-fn finish(capture: &PathBuf, base: &PathBuf, opts: &RecordOptions, progress: &dyn Fn(u32)) -> Result<String, String> {
+fn finish(capture: &Path, base: &Path, opts: &RecordOptions, progress: &dyn Fn(u32)) -> Result<String, String> {
     let (crf, preset, audio_rate, suffix) = if opts.raw_output {
         ("12", "slow", "320k", "-raw")
     } else {

@@ -22,6 +22,8 @@ const TARGET_BYTES: u64 = 800 * 1024 * 1024;
 /// Thumbnails are made at twice the requested size, for Retina screens.
 const PIXEL_RATIO: u32 = 2;
 
+/// One file the page wants a thumbnail for. The modified time (ms) and size (bytes) are part of
+/// the cache key, so a changed file gets a new thumbnail.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileInfo {
@@ -30,6 +32,8 @@ pub struct FileInfo {
     pub size: u64,
 }
 
+/// Answer to a batch: `cached` maps source path → cache file for thumbnails that exist now;
+/// `pending` lists the sources that will arrive later as events.
 #[derive(Serialize)]
 pub struct RequestResult {
     pub cached: HashMap<String, String>,
@@ -57,12 +61,15 @@ struct Shared {
     app: AppHandle,
 }
 
+/// The thumbnail queue, its worker threads and the cache folder. One for the whole app.
 pub struct ThumbService {
     shared: Arc<Shared>,
     cache_dir: PathBuf,
 }
 
 impl ThumbService {
+    /// Makes the cache folder and starts one worker thread per performance core, plus a thread
+    /// that trims the cache to its size limit every hour.
     pub fn start(app: AppHandle, cache_dir: PathBuf) -> Self {
         let _ = fs::create_dir_all(&cache_dir);
         let shared = Arc::new(Shared { queue: Mutex::default(), wake: Condvar::new(), app });
@@ -81,6 +88,9 @@ impl ThumbService {
         Self { shared, cache_dir }
     }
 
+    /// Returns cached thumbnails at once and queues the rest, newest request first. Each queued
+    /// file then sends "viewer:thumb:ready" or "viewer:thumb:error"; "viewer:thumb:done" follows
+    /// the last one. `target_size` is in CSS px; thumbnails are made at twice that.
     pub fn request(&self, request_id: String, files: Vec<FileInfo>, target_size: u32) -> RequestResult {
         let mut cached = HashMap::new();
         let mut jobs = Vec::new();
@@ -109,7 +119,7 @@ impl ThumbService {
 
         let pending = jobs.iter().map(|j| j.src.clone()).collect();
         if !jobs.is_empty() {
-            let mut q = self.shared.queue.lock().unwrap();
+            let mut q = crate::sync::lock(&self.shared.queue);
             *q.remaining.entry(request_id).or_default() += jobs.len();
             // Newest request first: after a fast scroll, the rows on screen now come before the
             // rows passed on the way. Reversed, so the newest batch still starts at its top-left.
@@ -119,8 +129,9 @@ impl ThumbService {
         RequestResult { cached, pending }
     }
 
+    /// Drops this request's jobs that have not started. Sends "viewer:thumb:done" when none are left.
     pub fn cancel(&self, request_id: &str) {
-        let mut q = self.shared.queue.lock().unwrap();
+        let mut q = crate::sync::lock(&self.shared.queue);
         let before = q.jobs.len();
         q.jobs.retain(|j| j.request_id != request_id);
         let dropped = before - q.jobs.len();
@@ -175,16 +186,18 @@ fn lookup(base: &Path) -> Option<PathBuf> {
 fn worker_loop(shared: &Shared) {
     loop {
         let job = {
-            let mut q = shared.queue.lock().unwrap();
+            let mut q = crate::sync::lock(&shared.queue);
             loop {
                 if let Some(job) = q.jobs.pop_back() {
                     break job;
                 }
-                q = shared.wake.wait(q).unwrap();
+                q = crate::sync::wait(&shared.wake, q);
             }
         };
 
-        let result = generate(&job);
+        // A crash inside one image's decoder must not end this worker: report it as an error.
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| generate(&job)))
+            .unwrap_or_else(|_| Err("this file crashed the thumbnail maker".into()));
         match result {
             Ok(path) => {
                 let _ = shared.app.emit(
@@ -200,7 +213,7 @@ fn worker_loop(shared: &Shared) {
             }
         }
 
-        let mut q = shared.queue.lock().unwrap();
+        let mut q = crate::sync::lock(&shared.queue);
         let finished = match q.remaining.get_mut(&job.request_id) {
             Some(left) => {
                 *left -= 1;
@@ -228,6 +241,12 @@ fn generate(job: &Job) -> Result<String, String> {
 
 /// Keeps the cache under 1 GB: when over, removes the least recently used files down to 800 MB.
 fn evict_if_needed(root: &Path) {
+    evict(root, CAP_BYTES, TARGET_BYTES);
+}
+
+/// When the files in `root`'s shard folders total more than `cap` bytes, removes the least
+/// recently used ones until `target` bytes or less remain.
+fn evict(root: &Path, cap: u64, target: u64) {
     let mut files: Vec<(PathBuf, u64, SystemTime)> = Vec::new();
     let mut total = 0u64;
     let Ok(shards) = fs::read_dir(root) else { return };
@@ -243,16 +262,77 @@ fn evict_if_needed(root: &Path) {
             files.push((entry.path(), meta.len(), used));
         }
     }
-    if total <= CAP_BYTES {
+    if total <= cap {
         return;
     }
     files.sort_by_key(|f| f.2);
     for (path, size, _) in files {
-        if total <= TARGET_BYTES {
+        if total <= target {
             break;
         }
         if fs::remove_file(&path).is_ok() {
             total -= size;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testutil::{temp_dir, write_png};
+
+    #[test]
+    fn makes_a_thumbnail_and_finds_it_again() {
+        let dir = temp_dir("thumbs-make");
+        let src = dir.join("photo.png");
+        write_png(&src, 400, 200);
+        let job = Job {
+            request_id: "r1".into(),
+            src: src.to_string_lossy().into_owned(),
+            kind: Kind::Image,
+            target: dir.join("ab").join("abcdef"),
+            max_px: 100,
+        };
+        std::fs::create_dir_all(dir.join("ab")).unwrap();
+        let made = PathBuf::from(generate(&job).expect("a thumbnail"));
+        assert_eq!(macos::image_size(&made), Some((100, 50)), "the long side fits, the shape stays");
+        assert_eq!(lookup(&job.target), Some(made));
+        assert_eq!(lookup(&dir.join("ab").join("missing")), None);
+
+        let broken = Job { src: dir.join("gone.jpg").to_string_lossy().into_owned(), ..job };
+        assert!(generate(&broken).is_err());
+    }
+
+    #[test]
+    fn an_empty_cache_file_counts_as_missing() {
+        let dir = temp_dir("thumbs-empty");
+        std::fs::write(dir.join("x.jpg"), b"").unwrap();
+        assert_eq!(lookup(&dir.join("x")), None, "a half-written file is made again");
+    }
+
+    #[test]
+    fn eviction_removes_the_least_recently_used_first() {
+        let root = temp_dir("thumbs-evict");
+        let shard = root.join("aa");
+        std::fs::create_dir_all(&shard).unwrap();
+        let now = SystemTime::now();
+        for (i, name) in ["old", "mid", "new"].iter().enumerate() {
+            let p = shard.join(format!("{name}.jpg"));
+            std::fs::write(&p, vec![0u8; 100]).unwrap();
+            let used = now - Duration::from_secs(1000 * (3 - i as u64));
+            std::fs::File::options().write(true).open(&p).unwrap().set_modified(used).unwrap();
+        }
+        evict(&root, 300, 200);
+        assert_eq!(std::fs::read_dir(&shard).unwrap().count(), 3, "at the limit: nothing goes");
+
+        evict(&root, 250, 150);
+        let left: Vec<_> = std::fs::read_dir(&shard).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert_eq!(left, ["new.jpg"], "down to the target, oldest first");
+    }
+
+    #[test]
+    fn workers_match_the_cores() {
+        let n = worker_count();
+        assert!((2..=12).contains(&n));
     }
 }

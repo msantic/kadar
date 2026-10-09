@@ -5,6 +5,7 @@ import { selectPath } from './selection'
 import { getState, setState } from './store'
 import { updateSession } from './session'
 
+/** One change that ⌘Z can reverse. */
 export type UndoStep =
   | { kind: 'trash'; pairs: [string, string][] } // [where it was, where it is in the Trash]
   | { kind: 'rename'; now: string; before: string } // full paths
@@ -12,6 +13,7 @@ export type UndoStep =
 const MAX_STEPS = 50
 const steps: UndoStep[] = []
 
+/** Remembers a change for ⌘Z. Keeps the newest 50; older ones drop off. */
 export function pushUndo(step: UndoStep): void {
   steps.push(step)
   if (steps.length > MAX_STEPS) steps.shift()

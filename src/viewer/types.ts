@@ -1,11 +1,16 @@
+// Shapes of the data the viewer gets from Rust, and the `window.viewer` API that bridge.ts
+// fills in. Field names match the Rust commands' JSON (camelCase).
+
 /** 'folder' is a subfolder tile in the grid; Rust lists folders separately. */
 export type Kind = 'image' | 'video' | 'unsupported' | 'folder'
 
+/** A subfolder: its name and full path. */
 export interface FolderEntry {
   name: string
   path: string
 }
 
+/** One tile in the grid. Times are ms since 1970; `size` is in bytes; `ext` has no dot. */
 export interface FileEntry {
   name: string
   path: string
@@ -18,12 +23,14 @@ export interface FileEntry {
   takenMs?: number | null
 }
 
+/** A folder's contents. Hidden and unsupported files are left out. `truncated`: stopped at 50,000 items. */
 export interface FolderListing {
   folders: FolderEntry[]
   files: FileEntry[]
   truncated: boolean
 }
 
+/** A folder in the sidebar's Favorites. `label` is the shown name; `addedAt` is ms since 1970. */
 export interface Favorite {
   id: string
   path: string
@@ -32,6 +39,7 @@ export interface Favorite {
   kind: 'folder'
 }
 
+/** Full paths of the user's standard folders, for the sidebar's Locations. */
 export interface DefaultRoots {
   home: string
   pictures: string
@@ -40,6 +48,7 @@ export interface DefaultRoots {
   movies: string
 }
 
+/** Basic facts about one file. Size in px; no size or duration when Rust cannot read them. */
 export interface FileMetadata {
   width?: number
   height?: number
@@ -48,6 +57,7 @@ export interface FileMetadata {
   mtimeMs: number
 }
 
+/** Settings of Export for Web. `maxWidth` is in px (null keeps the width); `quality` is 1–100. */
 export interface ExportOptions {
   /** Clockwise quarter turns, 0–3. */
   turns: number
@@ -60,12 +70,14 @@ export interface ExportOptions {
   aspect?: number | null
 }
 
+/** The outcome for one image of a batch export: a result or an error, never both. */
 export interface BatchItem {
   source: string
   result: ExportResult | null
   error: string | null
 }
 
+/** An exported image in Kadar's results folder, before Save or Copy. Size in px; `bytes` is the file size. */
 export interface ExportResult {
   width: number
   height: number
@@ -73,8 +85,10 @@ export interface ExportResult {
   path: string
 }
 
+/** Call it to stop listening. */
 export type Unsubscribe = () => void
 
+/** The `window.viewer` object: everything the viewer asks of Rust. Filled in by bridge.ts. */
 export interface ViewerAPI {
   fs: {
     listFolder: (dirPath: string) => Promise<FolderListing>

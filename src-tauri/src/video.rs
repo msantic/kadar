@@ -1,6 +1,6 @@
 //! Video compression with the small bundled ffmpeg: H.264 (x264) + AAC 128 kb/s MP4.
 //! The Mac's own H.264 encoder was tested and gave visibly worse video at the same size,
-//! so Kadar ships this tool instead. It is built by `app/scripts/build-ffmpeg.sh`.
+//! so Kadar ships this tool instead. It is built by `scripts/build-ffmpeg.sh`.
 
 use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Read};
@@ -12,6 +12,8 @@ use std::thread;
 
 use serde::Deserialize;
 
+/// The optimizer's video size: keep the size, or fit inside 1080p, 720p or 480p. Smaller videos
+/// are never made bigger. The window sends "same", "1080p", "720p" or "480p".
 #[derive(Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Preset {
     #[serde(rename = "same")]
@@ -43,12 +45,18 @@ impl Preset {
 
 /// The tool sits next to the app's own program file, in the app bundle and in dev builds.
 fn ffmpeg_path() -> PathBuf {
+    // Checks run from a build folder with no tool next to them: use the built one directly.
+    if cfg!(test) {
+        return PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bin").join("ffmpeg-aarch64-apple-darwin");
+    }
     std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.join("ffmpeg")))
         .unwrap_or_else(|| PathBuf::from("ffmpeg"))
 }
 
+/// Makes a web MP4 of `src` at `dest` (H.264 quality 23, AAC 128 kb/s). Blocks until done;
+/// `progress` gets 1–99 percent. The error is the tool's last log line.
 pub fn compress(src: &Path, dest: &Path, preset: Preset, progress: &dyn Fn(u32)) -> Result<(), String> {
     let filter = preset.filter();
     let args = [
@@ -82,7 +90,7 @@ pub fn encode(src: &Path, dest: &Path, args: &[&OsStr], progress: &dyn Fn(u32)) 
 
     // ffmpeg prints "Duration: 00:01:23.45" on stderr; keep the log for error messages.
     let duration_ms = Arc::new(AtomicU64::new(0));
-    let mut stderr = child.stderr.take().expect("stderr is piped");
+    let mut stderr = child.stderr.take().ok_or("the video tool gave no log")?;
     let log = {
         let duration_ms = duration_ms.clone();
         thread::spawn(move || {
@@ -105,11 +113,11 @@ pub fn encode(src: &Path, dest: &Path, args: &[&OsStr], progress: &dyn Fn(u32)) 
 
     // Progress lines on stdout: "out_time_us=12345678".
     let mut last = 0;
-    for line in BufReader::new(child.stdout.take().expect("stdout is piped")).lines().map_while(Result::ok) {
+    let stdout = child.stdout.take().ok_or("the video tool gave no progress")?;
+    for line in BufReader::new(stdout).lines().map_while(Result::ok) {
         let Some(us) = line.strip_prefix("out_time_us=").and_then(|v| v.parse::<u64>().ok()) else { continue };
-        let total = duration_ms.load(Ordering::Relaxed);
-        if total > 0 {
-            let p = (us / 1000 * 100 / total).min(99) as u32;
+        if let Some(p) = (us / 1000 * 100).checked_div(duration_ms.load(Ordering::Relaxed)) {
+            let p = p.min(99) as u32;
             if p > last {
                 last = p;
                 progress(p);
@@ -158,5 +166,53 @@ mod tests {
         assert_eq!(parse_duration("  Duration: 00:00:32.08, start: 0.0"), Some(32_080));
         assert_eq!(parse_duration("  Duration: 01:02:03.50, start"), Some(3_723_500));
         assert_eq!(parse_duration("  Duration: N/A, start"), None);
+        assert_eq!(parse_duration("no duration here"), None);
+    }
+
+    #[test]
+    fn presets_fit_inside_their_box_and_never_grow() {
+        assert_eq!(Preset::Same.filter(), "scale=trunc(iw/2)*2:trunc(ih/2)*2");
+        let p720 = Preset::P720.filter();
+        assert!(p720.contains("min(1280,iw)") && p720.contains("min(720,ih)"), "{p720}");
+        assert!(p720.contains("force_divisible_by=2"), "H.264 needs even sizes");
+        assert!(Preset::P1080.filter().contains("min(1920,iw)"));
+        assert!(Preset::P480.filter().contains("min(854,iw)"));
+        let names: Vec<Preset> = serde_json::from_str(r#"["same","1080p","720p","480p"]"#).unwrap();
+        assert_eq!(names, [Preset::Same, Preset::P1080, Preset::P720, Preset::P480]);
+    }
+
+    /// The 1-second clip (320×240, H.264 + AAC) in tests/data, made once with a full ffmpeg.
+    fn clip() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests").join("data").join("clip.mov")
+    }
+
+    #[test]
+    fn compresses_a_clip_to_mp4() {
+        let dir = crate::testutil::temp_dir("video-compress");
+        let dest = dir.join("out").join("clip.mp4");
+        let calls = std::cell::Cell::new(0);
+        compress(&clip(), &dest, Preset::P720, &|p| {
+            assert!(p <= 99, "100% is for the caller to show when done");
+            calls.set(calls.get() + 1);
+        })
+        .expect("compressed");
+        assert!(dest.is_file());
+        assert!(!dest.with_extension("part.mp4").exists(), "the temp file is renamed");
+        assert_eq!(audio_track_count(&dest), 1, "the sound is kept");
+        let info = Command::new(ffmpeg_path()).args(["-hide_banner", "-i"]).arg(&dest).output().unwrap();
+        assert!(String::from_utf8_lossy(&info.stderr).contains("320x240"), "a small clip is not made bigger");
+    }
+
+    #[test]
+    fn a_failed_run_leaves_no_file_and_says_why() {
+        let dir = crate::testutil::temp_dir("video-fail");
+        let src = dir.join("broken.mov");
+        std::fs::write(&src, b"this is not a video").unwrap();
+        let dest = dir.join("broken.mp4");
+        let err = compress(&src, &dest, Preset::Same, &|_| {}).unwrap_err();
+        assert!(!err.is_empty());
+        assert!(!dest.exists() && !dest.with_extension("part.mp4").exists());
+        assert_eq!(audio_track_count(&src), 0);
+        assert_eq!(audio_track_count(&clip()), 1);
     }
 }

@@ -1,3 +1,6 @@
+// The big view: one image or video over the grid, with zoom, pan, swipe and the Info panel.
+// Opens on the bus event `lightbox:open`; `lightboxIndex` in the store says which file is shown.
+
 import { emit, on } from '../bus'
 import { getState, setState, subscribe } from '../store'
 import { fileUrl } from '../ipc'
@@ -5,7 +8,9 @@ import { updateSession } from '../session'
 import { copySelection, selectOnly } from '../selection'
 import type { FileEntry } from '../types'
 import { createInfoPanel } from '../info/info'
+import { formatBytes } from '../format'
 
+/** The big view's element (hidden while closed) and a function that stops its listeners. */
 export interface LightboxHandle {
   root: HTMLElement
   dispose: () => void
@@ -15,12 +20,6 @@ const MAX_SCALE = 16
 const STAGE_PADDING = 40
 /** "100%": one image pixel per screen pixel, so a Retina screen shows the real sharpness. */
 const actualPixels = (): number => 1 / (window.devicePixelRatio || 1)
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`
-  return `${(n / 1024 / 1024).toFixed(1)} MB`
-}
 
 /**
  * Big view. Images open fitted to the window. Pinch or ⌘-scroll zooms at the pointer,
@@ -352,7 +351,9 @@ export function createLightbox(): LightboxHandle {
 
   const off1 = on('lightbox:open',  ({ index }) => show(index))
   const off2 = on('lightbox:close', () => hide())
-  const off3 = on('lightbox:step',  ({ delta }) => step(delta))
+  const off3 = on('lightbox:zoom', ({ bigger }) => {
+    if (!img.hidden) zoomAtCenter(bigger ? scale * 1.25 : scale / 1.25)
+  })
 
   const unsub = subscribe((s, prev) => {
     if (s.currentFolder !== prev.currentFolder) hide()

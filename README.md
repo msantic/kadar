@@ -8,6 +8,18 @@ Fast image viewer and image/video tool for macOS (Apple Silicon, macOS 15+). Abo
 - **Record** — one window or the whole screen, with system sound and a microphone, to MP4.
 - **Screenshot** — one app window to PNG or WebP, with resize, trim and scale.
 
+## Documentation
+
+| Guide | For |
+|---|---|
+| [User guide](docs/user-guide.md) | Every feature, key and setting, tab by tab. |
+| [Architecture](docs/architecture.md) | How the Rust side and the window fit together; data on disk; speed design. |
+| [Development](docs/development.md) | Setup, checks, build, install, signing, ffmpeg, known traps, speed measuring. |
+| [Decisions](docs/decisions.md) | Lasting choices and why they were made. |
+
+Every code file starts with a comment that says what it is for, and every public function has a
+doc comment. `npm run check` fails when one is missing.
+
 ## Run and build
 
 Needs Rust (`~/.cargo/bin`), Node, and Xcode command line tools.
@@ -15,7 +27,8 @@ Needs Rust (`~/.cargo/bin`), Node, and Xcode command line tools.
 ```bash
 npm install
 npm run dev     # run with live reload
-npm run build   # signed Kadar.app and .dmg in src-tauri/target/release/bundle/
+npm run check   # types, window checks, docs check, Rust code checker, Rust checks
+npm run build   # all checks, then signed Kadar.app and .dmg in src-tauri/target/release/bundle/
 ```
 
 The first run builds a small ffmpeg (a few minutes, once). See below.

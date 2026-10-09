@@ -1,3 +1,8 @@
+//! Starts Kadar: builds the Tauri app, the menu bar and the `viewer-file://` protocol, sets up the
+//! shared services (thumbnails, favorites, date-taken cache, folder watch, recorder), and lists
+//! every command the window can call. It also takes files that Finder opens with Kadar and
+//! queues them for the window.
+
 mod capture;
 mod clipboard;
 mod commands;
@@ -11,6 +16,7 @@ mod menu;
 mod optimize;
 mod protocol;
 mod recorder;
+mod sync;
 mod taken;
 #[cfg(test)]
 mod testutil;
@@ -25,6 +31,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
+/// Builds and runs the app; returns only when Kadar quits. Panics if Tauri fails to start.
 pub fn run() {
     tauri::Builder::default()
         // Before everything else: Finder can hand over files before the app is fully set up.
@@ -34,7 +41,7 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         // Serves local files to the page as viewer-file://viewer/<absolute path>.
         .register_asynchronous_uri_scheme_protocol("viewer-file", protocol::handle)
-        .menu(|app| menu::build(app))
+        .menu(menu::build)
         .on_menu_event(|app, event| menu::forward(app, event.id().as_ref()))
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
@@ -111,7 +118,7 @@ pub fn run() {
                     return;
                 }
                 if let Some(opened) = app.try_state::<commands::OpenedFiles>() {
-                    opened.0.lock().unwrap().extend(paths);
+                    crate::sync::lock(&opened.0).extend(paths);
                 }
                 let _ = app.emit("open-paths", ());
                 if let Some(window) = app.get_webview_window("main") {

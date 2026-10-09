@@ -1,5 +1,9 @@
+// The viewer's shared state: open folder, its files, favorites, selection, big view.
+// One object for the whole window; parts read it with getState and react with subscribe.
+
 import type { FileEntry, FolderEntry, Favorite } from './types'
 
+/** Everything the viewer parts share. Change it only with setState, so listeners hear it. */
 export interface ViewerState {
   currentFolder: string | null
   entries: FileEntry[]
@@ -33,16 +37,19 @@ const state: ViewerState = {
 
 const listeners = new Set<Listener>()
 
+/** The live state object, not a copy. Do not change it directly. */
 export function getState(): ViewerState {
   return state
 }
 
+/** Merges `patch` into the state and calls every listener at once, even if nothing changed. */
 export function setState(patch: Partial<ViewerState>): void {
   const prev = { ...state }
   Object.assign(state, patch)
   for (const l of listeners) l(state, prev)
 }
 
+/** Calls `listener` with the new and the old state after each setState. Returns an unsubscribe function. */
 export function subscribe(listener: Listener): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)

@@ -1,4 +1,8 @@
-// Shared utilities for Record and Screenshot tabs — window picker, resize, save directory
+// Shared utilities for Record and Screenshot tabs — window picker, resize, save directory.
+// The Optimize tab uses the element and form-value helpers too. Talks to Rust through
+// `window.optimizer` (see installCaptureBridge in bridge.ts).
+
+import { readStored, writeStored } from './storage'
 
 declare const window: Window & {
   optimizer: {
@@ -8,6 +12,7 @@ declare const window: Window & {
   }
 }
 
+/** Window sizes and top-left positions in points, keyed by the preset menu's value. */
 export const SIZE_PRESETS: Record<string, { width: number; height: number; x: number; y: number }> = {
   '1944x1100': { width: 1944, height: 1100, x: 100, y: 80 },
   '1920x1080': { width: 1920, height: 1080, x: 0, y: 0 },
@@ -17,20 +22,24 @@ export const SIZE_PRESETS: Record<string, { width: number; height: number; x: nu
 
 // ─── DOM helpers ──────────────────────────────────────────────────────────────
 
+/** The element with this id. Not checked: a missing id gives null typed as T. */
 export function el<T extends HTMLElement>(id: string): T {
   return document.getElementById(id) as T
 }
 
+/** Removes the `hidden` attribute. A missing id is ignored. */
 export function show(id: string): void {
   document.getElementById(id)?.removeAttribute('hidden')
 }
 
+/** Sets the `hidden` attribute. A missing id is ignored. */
 export function hide(id: string): void {
   document.getElementById(id)?.setAttribute('hidden', '')
 }
 
 // ─── Running Apps ─────────────────────────────────────────────────────────────
 
+/** Fills the `<select>` with the names of running apps. On failure it shows one disabled line. */
 export async function loadRunningApps(selectId: string): Promise<void> {
   const select = el<HTMLSelectElement>(selectId)
   select.innerHTML = '<option>Loading…</option>'
@@ -48,8 +57,8 @@ export async function loadRunningApps(selectId: string): Promise<void> {
       select.appendChild(opt)
     }
   } catch (err) {
-    console.error('getRunningApps failed:', err)
     select.innerHTML = '<option disabled value="">Failed to list apps</option>'
+    select.title = String(err)
   }
 }
 
@@ -66,6 +75,7 @@ const COMMON_RATIOS: [number, number, string][] = [
   [1, 1, '1:1'],
 ]
 
+/** The nearest common ratio such as "16:9", or '' when none is within 2%. */
 export function formatRatio(w: number, h: number): string {
   if (w <= 0 || h <= 0) return ''
   const actual = w / h
@@ -85,6 +95,7 @@ export function formatRatio(w: number, h: number): string {
 
 // ─── Preset / Resize ──────────────────────────────────────────────────────────
 
+/** Wires the size preset menu: a preset fills and locks width and height; "custom" unlocks them. */
 export function setupPresetChange(
   presetSelectId: string,
   wInputId: string,
@@ -124,6 +135,7 @@ export function setupPresetChange(
   update()
 }
 
+/** Resizes the chosen app's front window and moves it to the preset's position (0, 0 for Custom). Shows the result on the button. */
 export async function doResize(
   windowSelectId: string,
   wInputId: string,
@@ -159,17 +171,23 @@ export async function doResize(
     }, 1500)
   } catch (err) {
     btn.textContent = 'Failed'
+    btn.title = String(err)
     btn.disabled = false
-    console.error('resize-window failed:', err)
+    setTimeout(() => {
+      btn.textContent = 'Resize'
+      btn.title = ''
+    }, 3000)
   }
 }
 
 // ─── Save Directory ───────────────────────────────────────────────────────────
 
+/** The saved output folder, or `defaultDir` when none is saved. */
 export function getSaveDir(storageKey: string, defaultDir: string): string {
-  return localStorage.getItem(storageKey) || defaultDir
+  return readStored(storageKey) || defaultDir
 }
 
+/** Wires the "choose folder" button: saves the choice, shows it, then calls `onChange`. */
 export function setupSaveDir(
   dirElId: string,
   btnId: string,
@@ -179,7 +197,7 @@ export function setupSaveDir(
   el(btnId).addEventListener('click', async () => {
     const dir = await window.optimizer.chooseDirectory()
     if (dir) {
-      localStorage.setItem(storageKey, dir)
+      writeStored(storageKey, dir)
       el(dirElId).textContent = dir
       onChange(dir)
     }
@@ -197,22 +215,22 @@ export function persist(elementId: string, storageKey?: string): void {
   const element = document.getElementById(elementId) as HTMLInputElement | HTMLSelectElement | null
   if (!element) return
 
-  const saved = localStorage.getItem(key)
+  const saved = readStored(key)
 
   if (element instanceof HTMLInputElement && element.type === 'checkbox') {
     if (saved !== null) element.checked = saved === '1'
     element.addEventListener('change', () => {
-      localStorage.setItem(key, element.checked ? '1' : '0')
+      writeStored(key, element.checked ? '1' : '0')
     })
   } else {
     if (saved !== null) element.value = saved
     element.addEventListener('change', () => {
-      localStorage.setItem(key, element.value)
+      writeStored(key, element.value)
     })
     // Also save on input for number fields (as user types)
     if (element instanceof HTMLInputElement) {
       element.addEventListener('input', () => {
-        localStorage.setItem(key, element.value)
+        writeStored(key, element.value)
       })
     }
   }

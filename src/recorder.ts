@@ -15,6 +15,7 @@ let saveDir = '~/Movies/Recordings'
 let timer: ReturnType<typeof setInterval> | null = null
 let busy = false
 
+/** Wires the Record tab, the first time it opens: saved settings, screen access, windows and microphones. */
 export async function initRecorder(): Promise<void> {
   saveDir = getSaveDir('recorder-save-dir', saveDir)
   el('save-dir').textContent = saveDir

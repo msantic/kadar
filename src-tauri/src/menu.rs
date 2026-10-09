@@ -16,6 +16,7 @@ fn item<R: Runtime>(app: &AppHandle<R>, id: &str, text: &str, key: Option<&str>)
     b.build(app)
 }
 
+/// Builds the whole menu bar: Kadar, File, Edit, View (with Sort By), Go and Window.
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let app_menu = SubmenuBuilder::new(app, "Kadar")
         .about(None)

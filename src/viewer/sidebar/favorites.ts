@@ -1,8 +1,12 @@
+// The sidebar's Favorites list. Rust keeps the list on disk (fav_* commands); the window keeps
+// a copy in the store. A click opens the folder through the bus.
+
 import { api } from '../ipc'
 import { emit } from '../bus'
 import { getState, setState, subscribe } from '../store'
 import type { Favorite } from '../types'
 
+/** Builds the Favorites section and loads the saved list. "+" adds the open folder, or asks for one. */
 export function createFavorites(): HTMLElement {
   const wrap = document.createElement('div')
   wrap.className = 'viewer-favorites'
@@ -25,7 +29,9 @@ export function createFavorites(): HTMLElement {
     const target = cur ?? await api.fs.chooseFolder()
     if (!target) return
     const fav = await api.favorites.add(target)
-    setState({ favorites: [...getState().favorites, fav] })
+    // Adding a folder that is already a favorite returns the one there: do not show it twice.
+    const others = getState().favorites.filter((f) => f.id !== fav.id)
+    setState({ favorites: [...others, fav] })
   })
 
   void api.favorites.list().then((favs) => setState({ favorites: favs }))

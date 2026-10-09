@@ -64,6 +64,7 @@ fn windows() -> Vec<WindowInfo> {
     out
 }
 
+/// Names of the apps with a normal window on screen, sorted A–Z, each name once.
 pub fn running_apps() -> Vec<String> {
     let mut names: Vec<String> = windows().into_iter().map(|w| w.owner).collect();
     names.sort_by_key(|n| n.to_lowercase());
@@ -71,6 +72,7 @@ pub fn running_apps() -> Vec<String> {
     names
 }
 
+/// Permission state for the window: "granted" or "denied" for each.
 #[derive(Serialize)]
 pub struct Permissions {
     screen: &'static str,
@@ -82,12 +84,16 @@ pub fn screen_access() -> bool {
     CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess()
 }
 
+/// Screen Recording state (asks macOS the first time). Microphone is always "granted" here;
+/// the recorder checks the real microphone access itself.
 pub fn permissions() -> Permissions {
     let screen = if screen_access() { "granted" } else { "denied" };
     Permissions { screen, microphone: "granted" }
 }
 
-fn expand_home(dir: &str) -> PathBuf {
+/// "~/Pictures" → the full path inside the home folder. Screenshots and recordings use it for
+/// their save folder; other paths stay as they are.
+pub(crate) fn expand_home(dir: &str) -> PathBuf {
     match dir.strip_prefix('~') {
         Some(rest) => PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(rest.trim_start_matches('/')),
         None => PathBuf::from(dir),
@@ -118,6 +124,8 @@ end tell"#
     }
 }
 
+/// Screenshot settings from the window. `format` is "png" or "webp"; `trim_px` is in screen
+/// points cut from each side; `scale` is a percent (100 = full size).
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ShotOptions {
@@ -149,6 +157,8 @@ pub fn largest_window_id(app_name: &str) -> Option<u32> {
     largest_window(app_name).map(|w| w.id)
 }
 
+/// Captures the app's largest window into `screenshot-<ms>.<format>` in the output folder
+/// (`~` allowed; made when missing). Returns the file's path, or a message the window can show.
 pub fn take(opts: &ShotOptions) -> Result<String, String> {
     let window = largest_window(&opts.app_name)
         .ok_or_else(|| format!("No open window found for \"{}\". Make sure the app is open and visible.", opts.app_name))?;
@@ -214,3 +224,17 @@ fn finish(raw: &Path, dest: &Path, window: &WindowInfo, opts: &ShotOptions) -> R
     std::fs::write(dest, bytes).map_err(|e| e.to_string())
 }
 
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn app_names_are_safe_inside_applescript() {
+        assert_eq!(super::applescript_text(r#"My "App" \ 2"#), r#"My \"App\" \\ 2"#);
+    }
+
+    #[test]
+    fn save_folders_expand_the_home_sign() {
+        let home = std::env::var("HOME").unwrap();
+        assert_eq!(super::expand_home("~/Pictures"), std::path::Path::new(&home).join("Pictures"));
+        assert_eq!(super::expand_home("/tmp/x"), std::path::Path::new("/tmp/x"));
+    }
+}

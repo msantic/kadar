@@ -1,3 +1,6 @@
+// Checks for Undo: putting trashed files back, renaming back, newest step first.
+// `window.viewer.fs` is a stand-in, so no real file moves.
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getState, setState } from './store'
 import { pushUndo, undoLast } from './undo'

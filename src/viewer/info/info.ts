@@ -2,6 +2,7 @@
 // The I key (or ⌘I, or the Info button) shows and hides it; Kadar remembers the choice.
 
 import type { FileEntry } from '../types'
+import { formatBytes } from '../format'
 
 const KEY = 'kadar:info-open'
 
@@ -10,12 +11,6 @@ type Props = Record<string, unknown>
 const group = (p: Props, name: string): Props => (p[name] as Props | undefined) ?? {}
 const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`
-  return `${(n / 1024 / 1024).toFixed(1)} MB`
-}
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -39,6 +34,7 @@ function duration(ms: number): string {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`
 }
 
+/** The panel element and its controls. `show` reads the details only while the panel is open. */
 export interface InfoPanel {
   root: HTMLElement
   isOpen: () => boolean
@@ -46,6 +42,7 @@ export interface InfoPanel {
   show: (entry: FileEntry) => void
 }
 
+/** Builds the panel, open or closed as last time. `onToggle` runs after each show or hide. */
 export function createInfoPanel(onToggle: () => void): InfoPanel {
   const root = document.createElement('aside')
   root.className = 'viewer-info'

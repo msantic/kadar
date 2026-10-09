@@ -43,6 +43,7 @@
         <p class="drop-label">Drop files or folders to optimize</p>
         <p class="drop-sub" id="drop-sub"></p>
       </div>
+      <div id="optimize-error" class="panel-error" hidden></div>
 
       <div class="options-bar">
         <label class="option-label">
@@ -171,7 +172,7 @@
           <button id="stop-btn" class="stop-btn">Stop</button>
         </div>
 
-        <div id="record-error" class="record-error" hidden></div>
+        <div id="record-error" class="panel-error" hidden></div>
 
         <div id="record-result" hidden>
           <span id="result-path" class="result-path"></span>
@@ -266,6 +267,8 @@
             Capture Screenshot
           </button>
         </div>
+
+        <div id="ss-error" class="panel-error" hidden></div>
 
         <div id="ss-result" hidden>
           <span id="ss-result-path" class="result-path"></span>

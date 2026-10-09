@@ -1,6 +1,7 @@
-//! "Export for web" of one image: rotate, crop, scale to a width, encode as WebP, JPG or PNG.
+//! "Export for web": rotate, crop, scale to a width, encode as WebP, JPG or PNG.
 //! Every change of a setting makes the real result (into a temp file), so the window shows the
 //! exact size and, on request, the compressed picture. Copy and Save reuse that result.
+//! Many images at once use the same settings (`export_batch`), on all cores.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -19,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use crate::macos::{self, Frame, Rgba};
 use crate::optimize;
 
+/// The crop box the user drew. Out-of-range values are clamped, so the box always holds a pixel.
 #[derive(Deserialize, Clone, Copy)]
 pub struct Crop {
     /// Part of the rotated image, as fractions 0..1 of its width and height.
@@ -28,6 +30,7 @@ pub struct Crop {
     pub h: f64,
 }
 
+/// The export settings from the window. Steps run in this order: turn, crop, scale, encode.
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportOptions {
@@ -44,6 +47,7 @@ pub struct ExportOptions {
     pub aspect: Option<f64>,
 }
 
+/// One made result: its size in pixels and in bytes, and where the file is.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportResult {
@@ -67,7 +71,7 @@ static LAST: Mutex<Option<Decoded>> = Mutex::new(None);
 
 fn decoded(path: &str) -> Result<std::sync::MutexGuard<'static, Option<Decoded>>, String> {
     let mtime = std::fs::metadata(path).and_then(|m| m.modified()).map_err(|e| e.to_string())?;
-    let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+    let mut last = crate::sync::lock(&LAST);
     let fresh = last.as_ref().is_some_and(|d| d.path == path && d.mtime == mtime);
     if !fresh {
         let (w, h) = macos::image_size(Path::new(path)).ok_or("cannot read image")?;
@@ -93,8 +97,10 @@ fn render(image: &CGImage, opts: &ExportOptions) -> Result<Rgba, String> {
     let odd = opts.turns % 2 == 1;
     let (rw, rh) = if odd { (ih, iw) } else { (iw, ih) };
     let c = opts.crop.unwrap_or_else(|| centered(rw, rh, opts.aspect));
-    let cx = (c.x.clamp(0.0, 1.0) * rw).round();
-    let cy = (c.y.clamp(0.0, 1.0) * rh).round();
+    // At least one pixel stays inside: a box at the far edge would leave no room, and an empty
+    // range makes `clamp` below panic.
+    let cx = (c.x.clamp(0.0, 1.0) * rw).round().min(rw - 1.0);
+    let cy = (c.y.clamp(0.0, 1.0) * rh).round().min(rh - 1.0);
     let cw = (c.w.clamp(0.0, 1.0) * rw).round().clamp(1.0, rw - cx);
     let ch = (c.h.clamp(0.0, 1.0) * rh).round().clamp(1.0, rh - cy);
 
@@ -125,19 +131,7 @@ fn render(image: &CGImage, opts: &ExportOptions) -> Result<Rgba, String> {
     let (dw, dh) = if odd { (ohf, owf) } else { (owf, ohf) };
     CGContext::draw_image(ctx, CGRect { origin: CGPoint { x: 0.0, y: 0.0 }, size: CGSize { width: dw, height: dh } }, Some(&cropped));
 
-    let mut opaque = true;
-    for px in data.chunks_exact_mut(4) {
-        let a = px[3] as u32;
-        if a == 255 {
-            continue;
-        }
-        opaque = false;
-        if a > 0 {
-            for v in &mut px[..3] {
-                *v = ((*v as u32 * 255 + a / 2) / a).min(255) as u8;
-            }
-        }
-    }
+    let opaque = macos::unpremultiply(&mut data);
     Ok(Rgba { width: ow as u32, height: oh as u32, data, opaque })
 }
 
@@ -191,7 +185,7 @@ fn result_name(source: &str, format: optimize::ImageFormat, taken: &Mutex<HashSe
         s if s.is_empty() => "image".to_string(),
         s => s,
     };
-    let mut taken = taken.lock().unwrap_or_else(|e| e.into_inner());
+    let mut taken = crate::sync::lock(taken);
     let mut name = format!("{base}.{}", ext(format));
     let mut n = 2;
     while !taken.insert(name.clone()) {
@@ -237,6 +231,7 @@ pub fn export_reference(path: &str, opts: &ExportOptions, dir: &Path) -> Result<
 /// The latest batch run; an older run stops at its next file.
 static BATCH_RUN: AtomicU64 = AtomicU64::new(0);
 
+/// The outcome for one source: a result or an error ("stopped" when a newer run took over).
 #[derive(Serialize)]
 pub struct BatchItem {
     pub source: String,
@@ -276,12 +271,12 @@ pub fn export_batch(
                     let bytes = encode(pixels, opts)?;
                     write(&run_dir.join(result_name(path, opts.format, &names)), &bytes, pw, ph)
                 })();
-                results.lock().unwrap()[i] = Some(one);
+                crate::sync::lock(&results)[i] = Some(one);
                 progress(done.fetch_add(1, Ordering::Relaxed) + 1, paths.len());
             });
         }
     });
-    let results = results.into_inner().unwrap();
+    let results = crate::sync::into_inner(results);
     Ok(paths
         .iter()
         .zip(results)
@@ -350,6 +345,47 @@ mod tests {
         assert_eq!(r.width, 400, "never scales up");
         assert!(std::path::Path::new(&r.path).is_file());
         assert_eq!(std::fs::metadata(&r.path).unwrap().len(), r.bytes);
+    }
+
+    #[test]
+    fn centered_shapes() {
+        let c = super::centered(400.0, 300.0, None);
+        assert_eq!((c.x, c.y, c.w, c.h), (0.0, 0.0, 1.0, 1.0), "no shape: the whole image");
+        let c = super::centered(400.0, 300.0, Some(1.0));
+        assert_eq!((c.x, c.y, c.w, c.h), (0.125, 0.0, 0.75, 1.0), "a square from a wide image");
+        let c = super::centered(300.0, 400.0, Some(16.0 / 9.0));
+        assert!((c.w - 1.0).abs() < 1e-9 && (c.h * 400.0 - 300.0 * 9.0 / 16.0).abs() < 1e-9, "16:9 from a tall image");
+        assert!((c.y - (1.0 - c.h) / 2.0).abs() < 1e-9, "in the middle");
+        let c = super::centered(400.0, 300.0, Some(0.0));
+        assert_eq!(c.w, 1.0, "a bad shape is ignored");
+    }
+
+    #[test]
+    fn crops_at_the_edge_or_out_of_range_do_not_crash() {
+        use crate::optimize::ImageFormat::Png;
+        let dir = crate::testutil::temp_dir("export-edges");
+        let src = dir.join("photo.png");
+        crate::testutil::write_png(&src, 40, 30);
+        let src = src.to_string_lossy().into_owned();
+        let out = dir.join("out");
+        let edge = Some(super::Crop { x: 1.0, y: 1.0, w: 0.5, h: 0.5 });
+        let r = super::export(&src, &opts(0, edge, None, Png), &out).unwrap();
+        assert_eq!((r.width, r.height), (1, 1));
+        let wild = Some(super::Crop { x: -3.0, y: -1.0, w: 9.0, h: 9.0 });
+        let r = super::export(&src, &opts(3, wild, None, Png), &out).unwrap();
+        assert_eq!((r.width, r.height), (30, 40), "clamped to the whole, turned image");
+        assert!(super::export(&dir.join("gone.png").to_string_lossy(), &opts(0, None, None, Png), &out).is_err());
+    }
+
+    #[test]
+    fn result_names_are_clean_and_unique() {
+        use crate::optimize::ImageFormat::{Jpg, Webp};
+        let taken = std::sync::Mutex::new(std::collections::HashSet::new());
+        assert_eq!(super::result_name("/a/My Photo.HEIC", Webp, &taken), "my-photo.webp");
+        assert_eq!(super::result_name("/b/my photo.jpg", Webp, &taken), "my-photo-2.webp");
+        assert_eq!(super::result_name("/b/my photo.jpg", Jpg, &taken), "my-photo.jpg");
+        assert_eq!(super::result_name("/c/Šuma.png", Webp, &taken), "suma.webp");
+        assert_eq!(super::result_name("/c/★.png", Webp, &taken), "image.webp", "no letters left");
     }
 
     #[test]

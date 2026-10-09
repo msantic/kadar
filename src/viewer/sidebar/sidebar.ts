@@ -1,6 +1,9 @@
+// The viewer's left column: Favorites on top, the Locations folder tree below.
+
 import { createTree } from './tree'
 import { createFavorites } from './favorites'
 
+/** Builds the sidebar element. The caller puts it in the page. */
 export function createSidebar(): HTMLElement {
   const aside = document.createElement('aside')
   aside.className = 'viewer-sidebar'

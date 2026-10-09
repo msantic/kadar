@@ -1,7 +1,11 @@
+// File order in the grid, the way Finder sorts. Pure functions, checked in sort.test.ts.
+
 import type { FileEntry } from './types'
 
+/** What the grid sorts by. `type` sorts by file extension. */
 export type SortBy = 'name' | 'taken' | 'modified' | 'created' | 'size' | 'type'
 
+/** Menu text for each sort choice. */
 export const SORT_LABELS: Record<SortBy, string> = {
   name: 'Name',
   taken: 'Date Taken',
@@ -19,6 +23,7 @@ export function defaultDescending(by: SortBy): boolean {
 // Finder order for names: "img2" before "img10", case ignored.
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 
+/** A sorted copy; the list it gets stays as it is. Ties sort by name, A to Z. */
 export function sortEntries(list: FileEntry[], by: SortBy, descending: boolean): FileEntry[] {
   const byName = (a: FileEntry, b: FileEntry): number => collator.compare(a.name, b.name)
   const key: (a: FileEntry, b: FileEntry) => number = {

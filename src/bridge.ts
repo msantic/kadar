@@ -1,5 +1,5 @@
-// Gives the viewer screens the same `window.viewer` API they had in Electron,
-// backed by Rust commands and events instead.
+// The one place where the viewer and the Screenshot tab reach Rust: `window.viewer` and
+// `window.optimizer` wrap Tauri commands (invoke) and events (listen) in plain functions.
 
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
@@ -19,6 +19,7 @@ function subscribe<T>(event: string, cb: (data: T) => void): Unsubscribe {
   }
 }
 
+/** Sets `window.viewer`: each method calls one Rust command or listens to one Rust event. */
 export function installViewerBridge(): void {
   const api: ViewerAPI = {
     fs: {
@@ -75,7 +76,7 @@ export function installViewerBridge(): void {
   window.viewer = api
 }
 
-// The Screenshot screen (shared with the Electron app) calls `window.optimizer`.
+// The Screenshot tab calls `window.optimizer`.
 interface CaptureAPI {
   getRunningApps: () => Promise<string[]>
   resizeWindow: (p: { app: string; width: number; height: number; x?: number; y?: number }) => Promise<void>
@@ -86,6 +87,7 @@ interface CaptureAPI {
   takeScreenshot: (p: { appName: string; outputDir: string; format: 'png' | 'webp'; shadow: boolean; trimPx: number; scale: number }) => Promise<string>
 }
 
+/** Sets `window.optimizer` for the Screenshot screen, backed by the capture_* Rust commands. */
 export function installCaptureBridge(): void {
   const api: CaptureAPI = {
     getRunningApps:  () => invoke('capture_running_apps'),

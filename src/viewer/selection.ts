@@ -47,6 +47,7 @@ export function extendTo(index: number): void {
   commit(new Set(entries.slice(lo, hi + 1).map((e) => e.path)), path, anchor)
 }
 
+/** Cmd+A: every file in the grid. The focused file stays; with none, the first file gets focus. */
 export function selectAll(): void {
   const { entries, selectedPath, anchorPath } = getState()
   if (entries.length === 0) return

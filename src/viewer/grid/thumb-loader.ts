@@ -1,3 +1,7 @@
+// Asks Rust for grid thumbnails (thumb_request) and reports each one as it is ready
+// (viewer:thumb:ready). Requests made in one animation frame go together; reset() cancels
+// the work in Rust and forgets everything, for example when another folder opens.
+
 import { api } from '../ipc'
 import type { FileEntry } from '../types'
 
@@ -5,21 +9,29 @@ const TARGET_SIZE = 256
 
 type ReadyCb = (srcPath: string, cachePath: string) => void
 
+/** Thumbnail requests for one grid. Calls `onReady` per file, from the cache or when Rust is done; never for a failed file. */
 export class ThumbLoader {
   private currentRequestId: string | null = null
   private pendingPaths = new Set<string>()
   private knownCached = new Map<string, string>()
+  /** Files Rust could not make a thumbnail for; not asked again until the folder reloads. */
+  private failed = new Set<string>()
   private flushTimer: number | null = null
   private queued: FileEntry[] = []
   private onReadyDispose: () => void
+  private onErrorDispose: () => void
 
   constructor(private readonly onReady: ReadyCb) {
     this.onReadyDispose = api.thumb.onReady(({ requestId, srcPath, cachePath }) => {
-      console.log('[thumb-loader] onReady:', srcPath, 'reqId match:', requestId === this.currentRequestId)
       if (requestId !== this.currentRequestId) return
       this.knownCached.set(srcPath, cachePath)
       this.pendingPaths.delete(srcPath)
       this.onReady(srcPath, cachePath)
+    })
+    this.onErrorDispose = api.thumb.onError(({ requestId, srcPath }) => {
+      if (requestId !== this.currentRequestId) return
+      this.pendingPaths.delete(srcPath)
+      this.failed.add(srcPath)
     })
   }
 
@@ -32,6 +44,7 @@ export class ThumbLoader {
     this.currentRequestId = null
     this.pendingPaths.clear()
     this.knownCached.clear()
+    this.failed.clear()
     this.queued = []
     if (this.flushTimer !== null) {
       cancelAnimationFrame(this.flushTimer)
@@ -43,6 +56,7 @@ export class ThumbLoader {
     for (const e of entries) {
       if (this.knownCached.has(e.path)) continue
       if (this.pendingPaths.has(e.path)) continue
+      if (this.failed.has(e.path)) continue
       this.queued.push(e)
       this.pendingPaths.add(e.path)
     }
@@ -60,11 +74,18 @@ export class ThumbLoader {
     if (!this.currentRequestId) this.currentRequestId = crypto.randomUUID()
     const requestId = this.currentRequestId
 
-    const res = await api.thumb.request({
-      requestId,
-      files: batch.map((e) => ({ srcPath: e.path, mtimeMs: e.mtimeMs, size: e.size })),
-      targetSize: TARGET_SIZE,
-    })
+    let res: Awaited<ReturnType<typeof api.thumb.request>>
+    try {
+      res = await api.thumb.request({
+        requestId,
+        files: batch.map((e) => ({ srcPath: e.path, mtimeMs: e.mtimeMs, size: e.size })),
+        targetSize: TARGET_SIZE,
+      })
+    } catch {
+      // The request did not reach Rust: forget these files, so the next scroll asks again.
+      for (const e of batch) this.pendingPaths.delete(e.path)
+      return
+    }
 
     if (requestId !== this.currentRequestId) return
 
@@ -77,6 +98,7 @@ export class ThumbLoader {
 
   dispose(): void {
     this.onReadyDispose()
+    this.onErrorDispose()
     this.reset()
   }
 }

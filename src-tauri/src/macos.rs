@@ -32,6 +32,7 @@ pub enum Frame {
 }
 
 impl Frame {
+    /// The image, whichever framework made it.
     pub fn image(&self) -> &CGImage {
         match self {
             Frame::Cf(i) => i,
@@ -141,6 +142,7 @@ pub fn image_size(path: &Path) -> Option<(u32, u32)> {
     }
 }
 
+/// Video length in ms, from AVFoundation. None when the Mac cannot read the file.
 pub fn video_duration_ms(path: &Path) -> Option<f64> {
     autoreleasepool(|_| unsafe {
         let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
@@ -185,21 +187,27 @@ pub fn render_rgba(image: &CGImage, w: usize, h: usize) -> Result<Rgba, String> 
     CGContext::draw_image(Some(&ctx), rect, Some(image));
     drop(ctx);
 
-    // The Mac draws premultiplied alpha; encoders expect straight alpha.
+    let opaque = unpremultiply(&mut data);
+    Ok(Rgba { width: w as u32, height: h as u32, data, opaque })
+}
+
+/// The Mac draws premultiplied alpha (color already multiplied by opacity); encoders expect
+/// straight alpha. Converts RGBA pixels in place. Returns true when every pixel is fully opaque.
+pub fn unpremultiply(data: &mut [u8]) -> bool {
     let mut opaque = true;
-    for px in data.chunks_exact_mut(4) {
+    for px in data.as_chunks_mut::<4>().0 {
         let a = px[3] as u32;
         if a == 255 {
             continue;
         }
         opaque = false;
-        if a > 0 {
+        if let Some(half) = (a > 0).then_some(a / 2) {
             for c in &mut px[..3] {
-                *c = ((*c as u32 * 255 + a / 2) / a).min(255) as u8;
+                *c = ((*c as u32 * 255 + half) / a).min(255) as u8;
             }
         }
     }
-    Ok(Rgba { width: w as u32, height: h as u32, data, opaque })
+    opaque
 }
 
 /// Cuts `rect` (in pixels, from the top-left) out of `frame`.
@@ -256,7 +264,7 @@ pub fn date_taken_ms(path: &Path) -> Option<f64> {
 /// "2025:01:03 15:47:35" (local time) → milliseconds since 1970.
 fn parse_exif_date(text: &str) -> Option<f64> {
     let n: Vec<i32> = text
-        .split(|c: char| c == ':' || c == ' ' || c == '-' || c == 'T')
+        .split([':', ' ', '-', 'T'])
         .filter(|s| !s.is_empty())
         .take(6)
         .map(|s| s.trim().parse().ok())
@@ -277,18 +285,6 @@ fn parse_exif_date(text: &str) -> Option<f64> {
     (secs != -1).then_some(secs as f64 * 1000.0)
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn exif_dates() {
-        assert!(super::parse_exif_date("2025:01:03 15:47:35").is_some());
-        assert_eq!(super::parse_exif_date("0000:00:00 00:00:00"), None);
-        assert_eq!(super::parse_exif_date("garbage"), None);
-        let a = super::parse_exif_date("2025:01:03 15:47:35").unwrap();
-        let b = super::parse_exif_date("2025:01:03 15:47:45").unwrap();
-        assert_eq!(b - a, 10_000.0);
-    }
-}
 
 /// Every detail the Mac reads from an image header (size, color, camera, lens, GPS, ...) as JSON,
 /// for the info panel. Groups keep their names, for example "{Exif}" and "{GPS}".
@@ -330,3 +326,81 @@ fn cf_to_json(value: &CFType) -> serde_json::Value {
     Value::Null
 }
 
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn exif_dates() {
+        assert!(super::parse_exif_date("2025:01:03 15:47:35").is_some());
+        assert_eq!(super::parse_exif_date("0000:00:00 00:00:00"), None);
+        assert_eq!(super::parse_exif_date("garbage"), None);
+        let a = super::parse_exif_date("2025:01:03 15:47:35").unwrap();
+        let b = super::parse_exif_date("2025:01:03 15:47:45").unwrap();
+        assert_eq!(b - a, 10_000.0);
+    }
+
+    use crate::testutil::{temp_dir, write_png};
+    use std::path::{Path, PathBuf};
+
+    fn clip() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/data/clip.mov")
+    }
+
+    #[test]
+    fn reads_sizes_properties_and_pixels() {
+        let dir = temp_dir("macos-image");
+        let png = dir.join("a.png");
+        write_png(&png, 120, 80);
+        assert_eq!(super::image_size(&png), Some((120, 80)));
+        assert_eq!(super::image_size(&dir.join("gone.png")), None);
+
+        let props = super::image_properties(&png).expect("properties");
+        assert_eq!(props["PixelWidth"], 120);
+        assert_eq!(props["PixelHeight"], 80);
+        assert_eq!(super::date_taken_ms(&png), None, "no camera data");
+
+        let small = super::decode_for_web(&png, 60).unwrap();
+        assert_eq!((small.width, small.height), (60, 40));
+        assert_eq!(small.data.len(), 60 * 40 * 4);
+        assert!(small.opaque);
+        let same = super::decode_for_web(&png, 1000).unwrap();
+        assert_eq!(same.width, 120, "never scales up");
+
+        assert_eq!(super::png_bytes(&png).unwrap(), std::fs::read(&png).unwrap(), "a PNG is used as it is");
+        let frame = super::image_thumbnail(&png, 120).unwrap();
+        let cut = super::crop(&frame, 10.0, 10.0, 30.0, 20.0).unwrap();
+        let rgba = super::to_rgba(&cut).unwrap();
+        assert_eq!((rgba.width, rgba.height), (30, 20));
+    }
+
+    #[test]
+    fn writes_thumbnails_as_jpg_or_png() {
+        let dir = temp_dir("macos-thumb");
+        let png = dir.join("a.png");
+        write_png(&png, 50, 50);
+        let frame = super::image_thumbnail(&png, 50).unwrap();
+        let ext = super::write_thumbnail(&frame, &dir.join("out")).unwrap();
+        assert_eq!(ext, "jpg", "no transparency: JPG, smaller");
+        assert!(dir.join("out.jpg").is_file());
+    }
+
+    #[test]
+    fn reads_video_frames_and_length() {
+        let frame = super::video_frame(&clip(), 160).expect("a frame");
+        let rgba = super::to_rgba(&frame).unwrap();
+        assert_eq!((rgba.width, rgba.height), (160, 120));
+        let ms = super::video_duration_ms(&clip()).unwrap();
+        assert!((900.0..=1100.0).contains(&ms), "{ms}");
+        assert!(super::video_frame(Path::new("/no/such.mov"), 100).is_err());
+    }
+
+    #[test]
+    fn straight_alpha_from_premultiplied() {
+        let mut px = [255, 0, 0, 255, 64, 32, 0, 128, 0, 0, 0, 0];
+        assert!(!super::unpremultiply(&mut px));
+        assert_eq!(&px[..4], [255, 0, 0, 255], "opaque pixels stay");
+        assert_eq!(&px[4..8], [128, 64, 0, 128], "half see-through: color doubled back");
+        assert_eq!(&px[8..], [0, 0, 0, 0], "fully clear stays clear");
+        let mut solid = [1, 2, 3, 255];
+        assert!(super::unpremultiply(&mut solid));
+    }
+}

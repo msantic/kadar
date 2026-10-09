@@ -13,10 +13,14 @@ use tauri::{AppHandle, Emitter};
 /// Changes closer together than this are reported once.
 const QUIET: Duration = Duration::from_millis(200);
 
+/// The one folder watch (Mac FSEvents, through the `notify` crate). None when nothing is watched.
 #[derive(Default)]
 pub struct FolderWatch(Mutex<Option<RecommendedWatcher>>);
 
 impl FolderWatch {
+    /// Watches `dir` (not its subfolders) in place of any earlier folder. After changes stop for
+    /// 200 ms, sends "viewer:fs:changed" { dirPath } once. A folder that cannot be watched is
+    /// silently left unwatched.
     pub fn watch(&self, app: AppHandle, dir: String) {
         self.unwatch();
         let (tx, rx) = mpsc::channel::<()>();
@@ -43,10 +47,11 @@ impl FolderWatch {
                 let _ = app.emit("viewer:fs:changed", json!({ "dirPath": dir }));
             }
         });
-        *self.0.lock().unwrap() = Some(watcher);
+        *crate::sync::lock(&self.0) = Some(watcher);
     }
 
+    /// Stops the watch; its thread ends on its own.
     pub fn unwatch(&self) {
-        self.0.lock().unwrap().take();
+        crate::sync::lock(&self.0).take();
     }
 }

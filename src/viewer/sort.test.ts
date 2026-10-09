@@ -1,3 +1,5 @@
+// Checks for grid sorting: Finder name order, ties, camera date fallback, default direction.
+
 import { describe, expect, it } from 'vitest'
 import { defaultDescending, sortEntries } from './sort'
 import { entry } from './testing'

@@ -1,3 +1,7 @@
+// The thumbnail grid: only the rows on screen get tiles, reused while you scroll. Owns the grid's
+// keys, clicks, rename in place and drag out to other apps. Reads files and selection from the
+// store; opens the big view and folders through the bus.
+
 import { computeLayout, totalHeight, ZOOM_DEFAULT, type GridLayout } from './grid-layout'
 import { createCell, assignCell, setCellThumb, positionCell, type CellHandle } from './grid-cell'
 import { ThumbLoader } from './thumb-loader'
@@ -14,14 +18,17 @@ import type { FileEntry } from '../types'
 
 const OVERSCAN_ROWS = 2
 
+/** The grid's element and controls. */
 export interface GridHandle {
   root: HTMLElement
+  /** Target tile width in px; the column count follows. */
   setZoom: (targetCell: number) => void
   /** Scrolls so the row with this image is at the top, and keeps it there on resize and zoom. */
   scrollToIndex: (index: number) => void
   dispose: () => void
 }
 
+/** Builds the grid and starts listening to the store, the bus and window keys. Fills itself from the store. */
 export function createGrid(): GridHandle {
   const root = document.createElement('div')
   root.className = 'viewer-grid-scroll'
@@ -118,9 +125,9 @@ export function createGrid(): GridHandle {
   }
 
   // Finder-style keys in the grid: arrows, Home/End and Page Up/Down move the selection (with
-  // Shift they grow it); Space or Return opens the big view; Cmd+A selects all; Cmd+C copies the
-  // files, Shift+Cmd+C their paths; Esc keeps only the focused file. The big view handles its own
-  // keys while open.
+  // Shift they grow it); Space opens the big view (or the folder); Return renames; Cmd+A selects
+  // all; Cmd+C copies the files, Shift+Cmd+C their paths; Esc keeps only the focused file. The
+  // big view handles its own keys while open.
   window.addEventListener('keydown', (e) => {
     if (e.defaultPrevented || e.ctrlKey || e.altKey) return
     if (getState().lightboxIndex !== null || root.offsetParent === null || entries.length === 0) return
@@ -264,7 +271,10 @@ export function createGrid(): GridHandle {
     const entry = cell.entry
     if (!entry) return
     if (!getState().selection.has(entry.path)) selectOnly(cell.index)
-    const icon = loader.getCached(entry.path) ?? (entry.kind === 'image' ? entry.path : '/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericFolderIcon.icns')
+    // The drag picture: the thumbnail, else the image itself, else a plain Mac icon.
+    const icons = '/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/'
+    const icon = loader.getCached(entry.path)
+      ?? (entry.kind === 'image' ? entry.path : icons + (entry.kind === 'folder' ? 'GenericFolderIcon.icns' : 'GenericDocumentIcon.icns'))
     if (icon) void window.viewer.share.startDrag(selectedPaths(), icon).catch(() => {})
   })
 

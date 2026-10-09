@@ -1,5 +1,9 @@
+//! Which files Kadar handles, decided by the file name extension only (no file is opened). The
+//! folder list, thumbnails, the `viewer-file://` protocol and the clipboard all ask here.
+
 use serde::Serialize;
 
+/// What a file is to Kadar. The window gets it as "image", "video" or "unsupported".
 #[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
@@ -27,6 +31,7 @@ pub fn needs_preview(name: &str) -> bool {
     PREVIEW_EXTS.contains(&ext_of(name).as_str())
 }
 
+/// The text after the last dot, in lower case; empty when there is no dot.
 pub fn ext_of(name: &str) -> String {
     match name.rfind('.') {
         Some(i) => name[i + 1..].to_lowercase(),
@@ -34,6 +39,7 @@ pub fn ext_of(name: &str) -> String {
     }
 }
 
+/// Image, video or unsupported, from the extension. Camera RAW and Photoshop files count as images.
 pub fn kind_of(name: &str) -> Kind {
     let ext = ext_of(name);
     if IMAGE_EXTS.contains(&ext.as_str()) || PREVIEW_EXTS.contains(&ext.as_str()) {
@@ -45,6 +51,7 @@ pub fn kind_of(name: &str) -> Kind {
     }
 }
 
+/// The MIME type to serve the file with; "application/octet-stream" for anything not listed.
 pub fn mime_of(path: &str) -> &'static str {
     match ext_of(path).as_str() {
         "jpg" | "jpeg" => "image/jpeg",

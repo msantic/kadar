@@ -1,3 +1,7 @@
+//! Reads a folder for the viewer: its subfolders and the images and videos in it, sorted the
+//! way Finder sorts names. Plain `std::fs`, one level deep, hidden files left out. The
+//! `list_folder` and `list_tree_children` commands use it.
+
 use std::cmp::Ordering;
 use std::fs;
 use std::path::Path;
@@ -9,12 +13,14 @@ use crate::formats::{ext_of, kind_of, Kind};
 
 const MAX_ENTRIES: usize = 50_000;
 
+/// One subfolder: its name and full path.
 #[derive(Serialize)]
 pub struct FolderEntry {
     pub name: String,
     pub path: String,
 }
 
+/// One image or video. `size` is in bytes; the times are ms since 1970 (0 when unknown).
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileEntry {
@@ -27,6 +33,8 @@ pub struct FileEntry {
     pub created_ms: f64,
 }
 
+/// What a folder holds. `truncated` is true when the folder had more than 50,000 entries and
+/// the rest were left out.
 #[derive(Serialize)]
 pub struct FolderListing {
     pub folders: Vec<FolderEntry>,
@@ -41,10 +49,13 @@ fn ms(time: std::io::Result<std::time::SystemTime>) -> f64 {
         .unwrap_or(0.0)
 }
 
+/// The last-modified time in ms since 1970; 0 when the Mac does not report one.
 pub fn mtime_ms(meta: &fs::Metadata) -> f64 {
     ms(meta.modified())
 }
 
+/// Subfolders and supported files of `dir`, both sorted by name. A folder that cannot be read
+/// gives an empty listing, not an error.
 pub fn list_folder(dir: &str) -> FolderListing {
     let mut folders = Vec::new();
     let mut files = Vec::new();
@@ -90,6 +101,8 @@ pub fn list_folder(dir: &str) -> FolderListing {
     FolderListing { folders, files, truncated }
 }
 
+/// Only the subfolders of `dir`, sorted by name, for the sidebar's folder tree. Empty when the
+/// folder cannot be read.
 pub fn list_tree_children(dir: &str) -> Vec<FolderEntry> {
     let Ok(read) = fs::read_dir(dir) else { return Vec::new() };
     let mut out: Vec<FolderEntry> = read
@@ -180,5 +193,26 @@ mod tests {
         assert_eq!(l.folders.len(), 1);
         assert_eq!(l.files[1].kind, crate::formats::Kind::Video);
         assert!(!l.truncated);
+    }
+
+    #[test]
+    fn more_name_orders() {
+        assert_ne!(natural_cmp("img007", "img7"), Ordering::Equal, "same value: still a fixed order");
+        assert_eq!(natural_cmp("a", "a1"), Ordering::Less);
+        assert_eq!(natural_cmp("x99999999999999999999999", "x100000000000000000000000"), Ordering::Less, "longer than any number type");
+        assert_ne!(natural_cmp("Šuma", "šuma"), Ordering::Equal, "same letters: still a fixed order");
+    }
+
+    #[test]
+    fn the_folder_tree_lists_only_visible_folders() {
+        let dir = crate::testutil::temp_dir("tree");
+        for d in ["2025", "2024", ".git", "Album 10", "Album 9"] {
+            std::fs::create_dir(dir.join(d)).unwrap();
+        }
+        std::fs::write(dir.join("photo.jpg"), b"x").unwrap();
+        let names: Vec<String> = super::list_tree_children(&dir.to_string_lossy()).into_iter().map(|f| f.name).collect();
+        assert_eq!(names, ["2024", "2025", "Album 9", "Album 10"]);
+        assert!(super::list_tree_children("/no/such/folder").is_empty());
+        assert!(super::list_folder("/no/such/folder").files.is_empty());
     }
 }

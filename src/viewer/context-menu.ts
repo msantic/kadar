@@ -9,6 +9,7 @@ import {
   copySelection, exportSelection, openSelectionDefault, optimizeSelection, selectedImages, selectedPaths, trashSelection,
 } from './selection'
 
+/** Opens the menu at window point x, y (CSS px). Does nothing when no file is selected. */
 export async function showContextMenu(x: number, y: number): Promise<void> {
   const paths = selectedPaths()
   if (paths.length === 0) return

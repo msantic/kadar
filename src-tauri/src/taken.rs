@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::macos;
 
+/// A file the window asks about, with its modified time in ms. A new time means the cached date
+/// is read again.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileStamp {
@@ -25,12 +27,14 @@ struct Known {
     taken_ms: Option<f64>,
 }
 
+/// The date-taken cache, in memory and in `date-taken-cache.json` in the app data folder.
 pub struct TakenDates {
     file: PathBuf,
     known: Mutex<HashMap<String, Known>>,
 }
 
 impl TakenDates {
+    /// Reads the cache file. A missing or broken file starts an empty cache.
     pub fn load(file: PathBuf) -> Self {
         let known = std::fs::read_to_string(&file)
             .ok()
@@ -42,7 +46,7 @@ impl TakenDates {
     /// Date taken for each file, in the same order; None when the photo has no camera date.
     pub fn get(&self, files: Vec<FileStamp>) -> Vec<Option<f64>> {
         let missing: Vec<usize> = {
-            let known = self.known.lock().unwrap();
+            let known = crate::sync::lock(&self.known);
             (0..files.len())
                 .filter(|&i| known.get(&files[i].path).is_none_or(|k| k.mtime_ms != files[i].mtime_ms))
                 .collect()
@@ -54,8 +58,8 @@ impl TakenDates {
             let workers = thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
             thread::scope(|scope| {
                 for _ in 0..workers {
-                    scope.spawn(|| loop {
-                        let Some(&i) = missing.get(next.fetch_add(1, Ordering::Relaxed)) else { break };
+                    scope.spawn(|| {
+                        while let Some(&i) = missing.get(next.fetch_add(1, Ordering::Relaxed)) {
                         let path = Path::new(&files[i].path);
                         // A cloud file kept only online would download in full to read its date.
                         // Skip it (it sorts by creation date) and ask again once it is on the Mac.
@@ -63,17 +67,18 @@ impl TakenDates {
                             continue;
                         }
                         let taken = macos::date_taken_ms(path);
-                        found.lock().unwrap().push((i, taken));
+                        crate::sync::lock(&found).push((i, taken));
+                        }
                     });
                 }
             });
-            let mut known = self.known.lock().unwrap();
-            for (i, taken_ms) in found.into_inner().unwrap() {
+            let mut known = crate::sync::lock(&self.known);
+            for (i, taken_ms) in crate::sync::into_inner(found) {
                 known.insert(files[i].path.clone(), Known { mtime_ms: files[i].mtime_ms, taken_ms });
             }
             self.save(&known);
         }
-        let known = self.known.lock().unwrap();
+        let known = crate::sync::lock(&self.known);
         files.iter().map(|f| known.get(&f.path).and_then(|k| k.taken_ms)).collect()
     }
 

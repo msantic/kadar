@@ -1,10 +1,10 @@
 // Optimize tab: drop files or folders, get web-ready copies in an "optimized" folder beside them.
-// Same screen as the Electron app; drops arrive through Tauri, which gives real file paths.
+// Drops arrive through Tauri, which gives real file paths.
 
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
-import { persist } from './shared'
+import { el, hide, persist, show } from './shared'
 
 interface Progress {
   file: string
@@ -16,7 +16,6 @@ interface Progress {
 
 const VIDEO_EXTS = new Set(['mp4', 'mov', 'm4v', 'avi', 'mkv', 'webm'])
 
-const el = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T
 
 interface QueueItem { el: HTMLLIElement; status: string }
 const items = new Map<string, QueueItem>()
@@ -30,6 +29,7 @@ export function optimizePaths(paths: string[]): Promise<number> {
   return startJob(paths)
 }
 
+/** Wires the Optimize tab once at launch. `isActive` says whether the tab is in front; drops count only then. */
 export function initOptimize(isActive: () => boolean): void {
   const dropZone = el('drop-zone')
   const queue = el('queue')
@@ -57,7 +57,11 @@ export function initOptimize(isActive: () => boolean): void {
       dropZone.classList.remove('drag-over')
     } else if (p.type === 'drop') {
       dropZone.classList.remove('drag-over')
-      await start(p.paths).catch((err) => console.error('optimize failed:', err))
+      hide('optimize-error')
+      await start(p.paths).catch((err) => {
+        el('optimize-error').textContent = `Optimize failed: ${String(err)}`
+        show('optimize-error')
+      })
     }
   })
 

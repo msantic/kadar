@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "scripts/build-ffmpeg.sh && PATH=\"$HOME/.cargo/bin:$PATH\" tauri dev",
     "build": "scripts/build-ffmpeg.sh && npm run check && PATH=\"$HOME/.cargo/bin:$PATH\" tauri build",
-    "check": "tsc && vitest run && cd src-tauri && PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --quiet"
+    "check": "tsc && vitest run && node scripts/check-docs.mjs && cd src-tauri && PATH=\"$HOME/.cargo/bin:$PATH\" cargo clippy --quiet --all-targets -- -D warnings && PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --quiet"
   },
   "devDependencies": {
     "@tauri-apps/api": "^2.12.1",

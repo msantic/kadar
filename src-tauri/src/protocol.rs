@@ -22,6 +22,8 @@ static PREVIEW_LOCK: Mutex<()> = Mutex::new(());
 /// Largest slice sent for an open-ended range ("bytes=N-"), so video starts fast.
 const MAX_OPEN_RANGE: u64 = 4 * 1024 * 1024;
 
+/// Answers one `viewer-file://` request on a background thread. Status 404 when the file is
+/// missing, 422 when a RAW or Photoshop copy cannot be made.
 pub fn handle<R: Runtime>(
     ctx: UriSchemeContext<'_, R>,
     request: Request<Vec<u8>>,
@@ -41,14 +43,19 @@ pub fn handle<R: Runtime>(
             _ => Some(path),
         };
         let Some(path) = path else {
-            responder.respond(Response::builder().status(StatusCode::UNPROCESSABLE_ENTITY).body(Vec::new()).unwrap());
+            responder.respond(empty(StatusCode::UNPROCESSABLE_ENTITY));
             return;
         };
-        let response = serve(&path, range.as_deref()).unwrap_or_else(|status| {
-            Response::builder().status(status).body(Vec::new()).unwrap()
-        });
+        let response = serve(&path, range.as_deref()).unwrap_or_else(empty);
         responder.respond(response);
     });
+}
+
+/// An answer with only a status code, for files that are missing or cannot be read.
+fn empty(status: StatusCode) -> Response<Vec<u8>> {
+    let mut response = Response::new(Vec::new());
+    *response.status_mut() = status;
+    response
 }
 
 fn serve(path: &str, range: Option<&str>) -> Result<Response<Vec<u8>>, StatusCode> {
@@ -87,7 +94,7 @@ fn preview(src: &Path, dir: &Path) -> Option<PathBuf> {
         .digest()
         .to_string();
     let base = dir.join(&key[..16]);
-    let _guard = PREVIEW_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let _guard = crate::sync::lock(&PREVIEW_LOCK);
     for ext in ["jpg", "png"] {
         let p = base.with_extension(ext);
         if p.is_file() {
@@ -115,7 +122,7 @@ fn parse_range(value: &str, len: u64) -> Option<(u64, u64)> {
         }
         (s, "") => {
             let start: u64 = s.parse().ok()?;
-            (start, (start + MAX_OPEN_RANGE - 1).min(len - 1))
+            (start, start.saturating_add(MAX_OPEN_RANGE - 1).min(len - 1))
         }
         (s, e) => (s.parse().ok()?, e.parse::<u64>().ok()?.min(len - 1)),
     };
@@ -151,6 +158,57 @@ mod tests {
         assert_eq!(parse_range("bytes=10-", 100), Some((10, 99)));
         assert_eq!(parse_range("bytes=-10", 100), Some((90, 99)));
         assert_eq!(parse_range("bytes=200-", 100), None);
+        // Bad or odd values from the page: no panic, and either no range or a safe one.
+        assert_eq!(parse_range("bytes=5-2", 100), None);
+        assert_eq!(parse_range("bytes=0-999", 100), Some((0, 99)), "the end is cut to the file");
+        assert_eq!(parse_range("bytes=-500", 100), Some((0, 99)), "a suffix longer than the file");
+        assert_eq!(parse_range("bytes=-0", 100), None);
+        assert_eq!(parse_range("bytes=0-1, 5-6", 100), Some((0, 1)), "only the first range");
+        assert_eq!(parse_range("bytes=18446744073709551615-", 100), None, "a huge start");
+        assert_eq!(parse_range("items=0-1", 100), None);
+        assert_eq!(parse_range("bytes=a-b", 100), None);
+        assert_eq!(parse_range("bytes=0-1", 0), None, "an empty file");
+        // An open range stops after a few MB, so a video starts without reading the whole file.
+        assert_eq!(parse_range("bytes=0-", 1 << 30), Some((0, MAX_OPEN_RANGE - 1)));
+    }
+
+    #[test]
+    fn serves_whole_files_and_ranges() {
+        let dir = crate::testutil::temp_dir("protocol-serve");
+        let path = dir.join("clip.mp4");
+        std::fs::write(&path, b"0123456789").unwrap();
+        let path = path.to_string_lossy();
+
+        let all = serve(&path, None).unwrap();
+        assert_eq!(all.status(), StatusCode::OK);
+        assert_eq!(all.body(), b"0123456789");
+        assert_eq!(all.headers()[header::CONTENT_TYPE], "video/mp4");
+
+        let part = serve(&path, Some("bytes=2-4")).unwrap();
+        assert_eq!(part.status(), StatusCode::PARTIAL_CONTENT);
+        assert_eq!(part.body(), b"234");
+        assert_eq!(part.headers()[header::CONTENT_RANGE], "bytes 2-4/10");
+
+        // A range the file cannot meet: the whole file, as browsers accept.
+        assert_eq!(serve(&path, Some("bytes=50-")).unwrap().body().len(), 10);
+
+        assert_eq!(serve(&dir.join("gone.jpg").to_string_lossy(), None).unwrap_err(), StatusCode::NOT_FOUND);
+        assert_eq!(empty(StatusCode::NOT_FOUND).status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn previews_are_made_once_and_reused() {
+        let dir = crate::testutil::temp_dir("protocol-preview");
+        let src = dir.join("photo.png");
+        crate::testutil::write_png(&src, 64, 48);
+        let cache = dir.join("pv");
+        let first = preview(&src, &cache).expect("a preview");
+        assert_eq!(macos::image_size(&first), Some((64, 48)), "full size");
+        let made = std::fs::metadata(&first).unwrap().modified().unwrap();
+        let second = preview(&src, &cache).unwrap();
+        assert_eq!(first, second);
+        assert_eq!(std::fs::metadata(&second).unwrap().modified().unwrap(), made, "not made again");
+        assert_eq!(preview(&dir.join("gone.cr2"), &cache), None);
     }
 
     #[test]

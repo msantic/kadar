@@ -1,4 +1,6 @@
-//! Commands the page calls. Each one matches a method on `window.viewer` in the page.
+//! Commands the page calls with `invoke`. Most back a method on `window.viewer` or
+//! `window.optimizer` (see `src/bridge.ts`); the optimizer, recorder and file-open code call
+//! theirs directly. Each command is thin and hands the work to its module.
 
 use std::path::Path;
 use std::process::Command;
@@ -18,16 +20,19 @@ use crate::optimize;
 use crate::thumbs::{FileInfo, RequestResult, ThumbService};
 use crate::watch::FolderWatch;
 
+/// The subfolders and images/videos of a folder, sorted by name. Empty when it cannot be read.
 #[tauri::command(async)]
 pub fn list_folder(dir_path: String) -> FolderListing {
     fs_scan::list_folder(&dir_path)
 }
 
+/// The subfolders of a folder, for the sidebar tree.
 #[tauri::command(async)]
 pub fn list_tree_children(dir_path: String) -> Vec<FolderEntry> {
     fs_scan::list_tree_children(&dir_path)
 }
 
+/// The user's standard folders for the sidebar. A folder the Mac does not report is "".
 #[derive(Serialize)]
 pub struct Roots {
     home: String,
@@ -37,6 +42,7 @@ pub struct Roots {
     movies: String,
 }
 
+/// Home, Pictures, Desktop, Downloads and Movies as full paths.
 #[tauri::command]
 pub fn get_roots(app: AppHandle) -> Roots {
     let p = app.path();
@@ -52,6 +58,7 @@ pub fn get_roots(app: AppHandle) -> Roots {
     }
 }
 
+/// Shows the Mac folder picker and waits. Returns the chosen path, or null when cancelled.
 #[tauri::command(async)]
 pub fn choose_folder(app: AppHandle) -> Option<String> {
     app.dialog()
@@ -204,6 +211,7 @@ pub fn image_properties(path: String) -> Option<serde_json::Value> {
 #[derive(Default)]
 pub struct OpenedFiles(pub std::sync::Mutex<Vec<String>>);
 
+/// One opened path, and whether it is a folder.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenedItem {
@@ -214,12 +222,13 @@ pub struct OpenedItem {
 /// Hands the waiting opened files to the window, once.
 #[tauri::command]
 pub fn take_opened(opened: State<'_, OpenedFiles>) -> Vec<OpenedItem> {
-    std::mem::take(&mut *opened.0.lock().unwrap())
+    std::mem::take(&mut *crate::sync::lock(&opened.0))
         .into_iter()
         .map(|path| OpenedItem { is_dir: Path::new(&path).is_dir(), path })
         .collect()
 }
 
+/// Shows the file selected in a Finder window. Does not wait; errors are ignored.
 #[tauri::command]
 pub fn reveal_in_finder(path: String) {
     let _ = Command::new("open").arg("-R").arg(path).spawn();
@@ -235,16 +244,20 @@ pub fn open_default(path: String) -> String {
     }
 }
 
+/// Starts watching the shown folder for changes; replaces any earlier watch.
 #[tauri::command]
 pub fn watch_folder(app: AppHandle, watch: State<'_, FolderWatch>, path: String) {
     watch.watch(app, path);
 }
 
+/// Stops watching the folder.
 #[tauri::command]
 pub fn unwatch_folder(watch: State<'_, FolderWatch>) {
     watch.unwatch();
 }
 
+/// Asks for thumbnails of a batch of files. Returns the cached ones now; the rest arrive as
+/// "viewer:thumb:ready" events.
 #[tauri::command(async)]
 pub fn thumb_request(
     thumbs: State<'_, ThumbService>,
@@ -255,11 +268,14 @@ pub fn thumb_request(
     thumbs.request(request_id, files, target_size)
 }
 
+/// Drops the thumbnails of this request that are not made yet.
 #[tauri::command]
 pub fn thumb_cancel(thumbs: State<'_, ThumbService>, request_id: String) {
     thumbs.cancel(&request_id);
 }
 
+/// Size and dimensions for the info panel. Width and height are in pixels and only for images;
+/// the duration (ms) only for videos. Missing values are left out.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileMetadata {
@@ -273,6 +289,7 @@ pub struct FileMetadata {
     mtime_ms: f64,
 }
 
+/// File size, modified time and image size or video length. Error when the file is gone.
 #[tauri::command(async)]
 pub fn meta_get(file_path: String) -> Result<FileMetadata, String> {
     let meta = std::fs::metadata(&file_path).map_err(|e| e.to_string())?;
@@ -297,21 +314,25 @@ pub fn meta_get(file_path: String) -> Result<FileMetadata, String> {
     Ok(out)
 }
 
+/// All favorite folders.
 #[tauri::command]
 pub fn fav_list(favs: State<'_, Favorites>) -> Vec<Favorite> {
     favs.list()
 }
 
+/// Adds a favorite folder and returns it (the existing one if the folder is already there).
 #[tauri::command]
 pub fn fav_add(favs: State<'_, Favorites>, path: String) -> Favorite {
     favs.add(path)
 }
 
+/// Removes a favorite by its id.
 #[tauri::command]
 pub fn fav_remove(favs: State<'_, Favorites>, id: String) {
     favs.remove(&id);
 }
 
+/// Changes a favorite's label. Returns the changed favorite, or null for an unknown id.
 #[tauri::command]
 pub fn fav_rename(favs: State<'_, Favorites>, id: String, label: String) -> Option<Favorite> {
     favs.rename(&id, label)
@@ -329,6 +350,8 @@ pub fn optimize_files(app: AppHandle, files: Vec<String>, options: optimize::Opt
     optimize::run(&app, files, &options);
 }
 
+/// Opens the path with `open`: a folder opens in Finder, a file in its default app. Does not
+/// wait; errors are ignored.
 #[tauri::command]
 pub fn open_in_finder(path: String) {
     let _ = Command::new("open").arg(path).spawn();
@@ -344,26 +367,32 @@ pub fn open_external(url: String) -> Result<(), String> {
     Command::new("open").arg(url).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// Names of the apps with a window on screen, for the app picker.
 #[tauri::command(async)]
 pub fn capture_running_apps() -> Vec<String> {
     capture::running_apps()
 }
 
+/// Screen Recording state; asks macOS the first time.
 #[tauri::command]
 pub fn capture_permissions() -> capture::Permissions {
     capture::permissions()
 }
 
+/// Moves and resizes the app's front window (screen points; missing x or y means 0). The error
+/// is the AppleScript message, for example when Accessibility access is missing.
 #[tauri::command(async)]
 pub fn capture_resize_window(app: String, width: i32, height: i32, x: Option<i32>, y: Option<i32>) -> Result<(), String> {
     capture::resize_window(&app, width, height, x.unwrap_or(0), y.unwrap_or(0))
 }
 
+/// Takes a screenshot of the app's largest window. Returns the saved file's path.
 #[tauri::command(async)]
 pub fn capture_take(options: capture::ShotOptions) -> Result<String, String> {
     capture::take(&options)
 }
 
+/// The microphones the Mac has, for the recorder's picker.
 #[tauri::command(async)]
 pub fn record_microphones() -> Vec<recorder::Microphone> {
     recorder::microphones()
@@ -375,6 +404,7 @@ pub fn record_mic_access() -> &'static str {
     recorder::microphone_access()
 }
 
+/// Starts a screen recording. Returns once recording runs, or an error to show.
 #[tauri::command(async)]
 pub fn record_start(rec: State<'_, Recorder>, options: recorder::RecordOptions) -> Result<(), String> {
     rec.start(options)

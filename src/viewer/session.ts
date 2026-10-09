@@ -2,8 +2,9 @@
 // open big view, open sidebar folders and sort order. Stored in localStorage; every read and
 // write is guarded, so the viewer still works when storage is not available.
 
-import type { SortBy } from './sort'
+import { SORT_LABELS, type SortBy } from './sort'
 
+/** What the viewer restores at launch. */
 export interface ViewerSession {
   /** Folder shown in the grid. */
   folder: string | null
@@ -42,17 +43,40 @@ const empty: ViewerSession = {
   filter: '',
 }
 
+/** Saved data → a session. Every value of the wrong type (an older version, a damaged save)
+ *  falls back to its default, so the viewer never starts with a value it cannot use. */
+export function sanitize(saved: unknown): ViewerSession {
+  const out: ViewerSession = { ...empty, selectedPaths: [], expanded: [] }
+  if (typeof saved !== 'object' || saved === null) return out
+  const s = saved as Record<string, unknown>
+  const text = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
+  const texts = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+  out.folder = text(s['folder'])
+  out.topPath = text(s['topPath'])
+  out.topIndex = typeof s['topIndex'] === 'number' && Number.isInteger(s['topIndex']) && s['topIndex'] >= 0 ? s['topIndex'] : 0
+  out.selectedPath = text(s['selectedPath'])
+  out.selectedPaths = texts(s['selectedPaths'])
+  out.anchorPath = text(s['anchorPath'])
+  out.bigView = s['bigView'] === true
+  out.expanded = texts(s['expanded'])
+  if (typeof s['sortBy'] === 'string' && s['sortBy'] in SORT_LABELS) out.sortBy = s['sortBy'] as SortBy
+  out.sortDescending = s['sortDescending'] === true
+  out.filter = typeof s['filter'] === 'string' ? s['filter'] : ''
+  return out
+}
+
 function load(): ViewerSession {
   try {
     const raw = localStorage.getItem(KEY)
-    if (raw) return { ...empty, ...(JSON.parse(raw) as Partial<ViewerSession>) }
+    if (raw) return sanitize(JSON.parse(raw))
   } catch { /* storage blocked or bad JSON: start fresh */ }
-  return { ...empty }
+  return sanitize(null)
 }
 
 const session = load()
 let timer: ReturnType<typeof setTimeout> | null = null
 
+/** The live session, read from storage once when this file loads. Change it with updateSession. */
 export function getSession(): Readonly<ViewerSession> {
   return session
 }

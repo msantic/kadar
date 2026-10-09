@@ -1,3 +1,6 @@
+// Checks for Finder-style selection: click, Cmd+click, Shift ranges, select all, files that
+// disappear, and saving the selection in the session.
+
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getState, setState } from './store'
 import { extendTo, restoreSelection, selectAll, selectedPaths, selectOnly, toggle } from './selection'

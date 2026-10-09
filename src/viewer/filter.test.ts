@@ -1,3 +1,5 @@
+// Checks for the search filter: empty query, case and accents, word order.
+
 import { describe, expect, it } from 'vitest'
 import { filterEntries } from './filter'
 import { entry } from './testing'
