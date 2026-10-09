@@ -32,7 +32,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let file = SubmenuBuilder::new(app, "File")
         .item(&item(app, "open-folder", "Open Folder…", None)?)
         .item(&item(app, "open-default", "Open in Default App", Some("CmdOrCtrl+O"))?)
-        .item(&item(app, "reveal", "Show in Finder", None)?)
+        .item(&item(app, "reveal", "Show in Finder", Some("CmdOrCtrl+R"))?)
         .separator()
         .item(&item(app, "export", "Export for Web…", Some("CmdOrCtrl+E"))?)
         .item(&item(app, "optimize", "Optimize", Some("Shift+CmdOrCtrl+O"))?)

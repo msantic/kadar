@@ -32,6 +32,7 @@ export async function showContextMenu(x: number, y: number): Promise<void> {
       }),
       await MenuItem.new({
         text: 'Show in Finder',
+        accelerator: 'Cmd+R',
         action: () => void window.viewer.fs.revealInFinder(focus),
       }),
       await MenuItem.new({
