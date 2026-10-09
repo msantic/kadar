@@ -698,6 +698,8 @@ In Finder, Kadar shows in **Open With** for these types: JPG, JPEG, PNG, HEIC, H
 
 Kadar on Windows is new. The Viewer, Optimize (images and videos), Export for Web and dragging files out work. Record and Screenshot come later.
 
+- To install Kadar on Windows, open **Kadar_…_x64-setup.exe**. Windows can show "Windows protected your PC". Click **More info**, then **Run anyway**. Kadar then shows in the Start menu.
+- To remove Kadar, open **Settings › Apps › Installed apps**, then choose **Kadar › Uninstall**.
 - Kadar on Windows has no menu bar. Use the keys below, or right-click a file.
 - Use **Ctrl** where this guide says **⌘**.
 - "Finder" is **File Explorer**, the "Trash" is the **Recycle Bin**, and "Movies" is **Videos**.

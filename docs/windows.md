@@ -79,6 +79,24 @@ scripts/win.sh 'cd C:\dev\kadar; npm ci; npx tauri build --no-bundle'   # → sr
   needs the build again.
 - The `.exe` runs alone: the window content is inside it, and WebView2 is part of Windows 11.
 
+## The installer (share Kadar for Windows)
+
+```bash
+npm run share:windows      # = scripts/win-sync.sh && scripts/win-installer.sh
+```
+
+- Builds the NSIS installer on the Windows machine from this Mac's working copy and copies it to
+  `src-tauri/target/release/bundle/windows/Kadar_<version>_x64-setup.exe` (about 5.5 MB). The copy
+  is checked byte for byte the first time (SHA-256); the script streams it through both SSH hops.
+- It installs for the current user, without administrator rights, into
+  `%LOCALAPPDATA%\Kadar` (`kadar.exe`, `ffmpeg.exe`, `uninstall.exe`), with a Start menu entry and an
+  entry in Settings › Apps for removal. Silent install for tests: `Kadar_..._x64-setup.exe /S`.
+- **Not signed** (owner's decision, 2026-10-09: Kadar is shared with friends). At the first
+  install Windows shows "Windows protected your PC" / "unknown publisher": click **More info**,
+  then **Run anyway**. Signing can be added later in `tauri.conf.json` without other changes.
+- WebView2 is part of Windows 11 and current Windows 10, so the installer does not carry it.
+- Raise `version` in `tauri.conf.json` before you share a new build.
+
 ## The video tool (ffmpeg) on Windows
 
 The same `scripts/build-ffmpeg.sh` builds the Windows tool, with the same parts as on the Mac
@@ -122,9 +140,8 @@ session; use the remote screen instead.
    ```
 3. **Connect** with Microsoft's **Windows App** (Mac App Store): Add PC → PC name `localhost`,
    user `build`, paste the password. The first time, accept the machine's certificate.
-4. **Start Kadar** in that session: double-click **Kadar** on the desktop. The shortcut opens
-   `C:\Users\build\Kadar\Kadar.exe`, with the video tool beside it as `ffmpeg.exe`, as the
-   installer will place them. Test photos and a short video are in Pictures › "Kadar test".
+4. **Start Kadar** in that session from the Start menu: the installed copy lives in
+   `%LOCALAPPDATA%\Kadar`. Test photos and a short video are in Pictures › "Kadar test".
 5. When done: sign out of the session (Start → user → Sign out), and stop the tunnel (Ctrl+C).
 
 The picture is compressed, so colors and sharpness look a little worse than on a real screen.
@@ -142,11 +159,10 @@ $ErrorActionPreference = "Continue"
 cd C:\dev\kadar
 cmd /c "npx tauri build --no-bundle 2>&1" | Select-Object -Last 1
 Stop-Process -Name Kadar -Force -ErrorAction SilentlyContinue; Start-Sleep 1
-$app = "$env:USERPROFILE\Kadar"
-New-Item -ItemType Directory -Force $app | Out-Null
-Copy-Item src-tauri\target\release\kadar.exe "$app\Kadar.exe" -Force
+$app = "$env:LOCALAPPDATA\Kadar"   # the installed copy (install once with the installer)
+Copy-Item src-tauri\target\release\kadar.exe "$app\kadar.exe" -Force
 Copy-Item src-tauri\bin\ffmpeg-x86_64-pc-windows-msvc.exe "$app\ffmpeg.exe" -Force
-schtasks /Create /TN KadarShow /TR "$app\Kadar.exe" /SC ONCE /ST 23:59 /IT /RU build /F | Out-Null
+schtasks /Create /TN KadarShow /TR "$app\kadar.exe" /SC ONCE /ST 23:59 /IT /RU build /F | Out-Null
 schtasks /Run /TN KadarShow | Out-Null
 PS
 ```
@@ -189,8 +205,8 @@ desktopheight:i:1000
 - **Video frames and length:** from File Explorer's own thumbnails and details.
 - **Video:** optimizing works with the bundled ffmpeg (built for Windows, 10.7 MB, static).
 - **Drag out:** the shell's own file drag (the same as File Explorer's), Copy only.
-- **Not yet:** Screenshot, Record,
-  an installer and signing, and one Kadar at a time (today "Open with Kadar" on a second file
+- **Installer:** yes, not signed (see "The installer").
+- **Not yet:** Screenshot, Record, and one Kadar at a time (today "Open with Kadar" on a second file
   starts a second Kadar window instead of showing the file in the first).
 - **Names:** Kadar refuses new names with `\ : * ? " < > |`, as Windows does.
 - **Undo after the Recycle Bin** moves the file back and removes the bin's record of it, so the

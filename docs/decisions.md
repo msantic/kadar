@@ -59,6 +59,12 @@ uses it, driven from the Mac over SSH, instead of paid build services. Linux get
 virtual machine on the same server. The server's runbook in the `bimtly` repo is the source of
 truth for how the machines work.
 
+### Windows installer without a certificate (2026-10-09)
+
+Kadar is shared with friends, not sold. A signing certificate costs about $200–400 a year, and
+Microsoft's signing service needs a company check. The installer goes out unsigned; Windows
+warns once ("unknown publisher"). Signing can be added later without other changes.
+
 ## Video
 
 ### A small self-built ffmpeg for video, not Apple's encoders (2026-10-08)
