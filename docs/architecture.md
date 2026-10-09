@@ -356,7 +356,7 @@ not also handle — or make sure the window calls `preventDefault()`.
   videos as "Alternate" viewer.
 - Signing: `Developer ID Application: Prelako d.o.o. (FC2M54RD3H)`, `Entitlements.plist` (audio
   input for the hardened runtime). Do not change the identity or app id: the signature keeps the
-  Screen Recording and microphone permissions. Not notarized yet.
+  Screen Recording and microphone permissions. `scripts/notarize.sh` makes the notarized installer.
 - `Info.plist` adds the microphone and Apple Events prompt texts.
 - Capabilities (`capabilities/default.json`): `core:default`, window dragging, badge label, menu.
 - Release profile: `opt-level 3`, LTO, one codegen unit, stripped. App size ~15 MB matters.
