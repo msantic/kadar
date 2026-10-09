@@ -188,7 +188,8 @@ desktopheight:i:1000
   PCs have them. Colors are read as sRGB for now.
 - **Video frames and length:** from File Explorer's own thumbnails and details.
 - **Video:** optimizing works with the bundled ffmpeg (built for Windows, 10.7 MB, static).
-- **Not yet:** dragging files out, Screenshot, Record,
+- **Drag out:** the shell's own file drag (the same as File Explorer's), Copy only.
+- **Not yet:** Screenshot, Record,
   an installer and signing, and one Kadar at a time (today "Open with Kadar" on a second file
   starts a second Kadar window instead of showing the file in the first).
 - **Names:** Kadar refuses new names with `\ : * ? " < > |`, as Windows does.
