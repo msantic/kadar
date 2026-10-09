@@ -52,7 +52,7 @@ export function createLightbox(): LightboxHandle {
   exportBtn.className = 'viewer-lightbox-export'
   exportBtn.textContent = 'Export for Web…'
   exportBtn.title = 'Rotate, crop and size this image for the web (⌘E)'
-  exportBtn.addEventListener('click', () => { if (current) emit('export:open', { path: current.path }) })
+  exportBtn.addEventListener('click', () => { if (current) emit('export:open', { paths: [current.path] }) })
 
   // Info panel on the right; the stage narrows so the image stays fully visible.
   const info = createInfoPanel(() => root.classList.toggle('with-info', info.isOpen()))
@@ -328,7 +328,7 @@ export function createLightbox(): LightboxHandle {
     const zoomable = !img.hidden
     // Cmd+C copies the shown file, Shift+Cmd+C its path, as in the grid.
     if (e.metaKey && e.key.toLowerCase() === 'c') { void copySelection(e.shiftKey); e.preventDefault(); return }
-    if (e.metaKey && e.key.toLowerCase() === 'e' && current?.kind === 'image') { emit('export:open', { path: current.path }); e.preventDefault(); return }
+    if (e.metaKey && e.key.toLowerCase() === 'e' && current?.kind === 'image') { emit('export:open', { paths: [current.path] }); e.preventDefault(); return }
     if (e.key.toLowerCase() === 'i' && !e.altKey && !e.ctrlKey) { info.toggle(); e.preventDefault(); return }
     if (e.metaKey) return
     if (e.key === 'Escape') { hide(); e.preventDefault() }

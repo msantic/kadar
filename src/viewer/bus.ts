@@ -10,7 +10,8 @@ export interface BusEvents {
   /** Go up, back or forward in the folder history. */
   'folder:go': { to: 'up' | 'back' | 'forward' }
   'rename:start': void
-  'export:open': { path: string }
+  /** One path: single-image export. Several: the same settings for all. */
+  'export:open': { paths: string[] }
   /** A menu bar item, by its id. */
   'menu': { id: string }
   'info:toggle': void

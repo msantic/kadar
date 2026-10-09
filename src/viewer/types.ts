@@ -56,6 +56,14 @@ export interface ExportOptions {
   maxWidth: number | null
   format: 'webp' | 'jpg' | 'png'
   quality: number
+  /** Without `crop`: cut this width/height shape from each image's center (batch). */
+  aspect?: number | null
+}
+
+export interface BatchItem {
+  source: string
+  result: ExportResult | null
+  error: string | null
 }
 
 export interface ExportResult {
@@ -114,6 +122,12 @@ export interface ViewerAPI {
     exportSave: (source: string, result: string) => Promise<string>
     /** Copies an export result to the clipboard. */
     exportCopy: (result: string) => Promise<void>
+    /** Many images with the same settings; a newer `run` stops an older one. */
+    exportBatch: (paths: string[], options: ExportOptions, run: number) => Promise<BatchItem[]>
+    onExportProgress: (cb: (p: { run: number; done: number; total: number }) => void) => Unsubscribe
+    exportCopyMany: (results: string[]) => Promise<void>
+    /** Saves each result next to its source; pairs are [source, result]. Returns the saved paths. */
+    exportSaveMany: (pairs: [string, string][]) => Promise<string[]>
   }
   clipboard: {
     copyFiles: (paths: string[]) => Promise<void>

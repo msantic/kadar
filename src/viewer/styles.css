@@ -622,3 +622,25 @@
 .viewer-path-part:last-child { color: var(--text-2); }
 .viewer-path-part:hover { background: var(--surface-hi); color: var(--text); }
 .viewer-path-sep { flex-shrink: 0; color: var(--muted); opacity: 0.6; }
+
+/* Export for web: results sheet in batch mode */
+.export-sheet {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  padding: 44px 24px 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 16px;
+  align-content: start;
+}
+.export-tile { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.export-tile img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  background: repeating-conic-gradient(#2a2a2e 0% 25%, #1f1f22 0% 50%) 50% / 12px 12px;
+  border-radius: 6px;
+}
+.export-tile figcaption { font-size: 11px; color: var(--text-2); text-align: center; font-variant-numeric: tabular-nums; }
+.export-tile-error { color: var(--error) !important; text-align: left !important; }

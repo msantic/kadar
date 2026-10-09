@@ -54,6 +54,10 @@ export function installViewerBridge(): void {
       exportImage: (path, options) => invoke('export_image', { path, options }),
       exportSave:  (source, result) => invoke('export_save', { source, result }),
       exportCopy:  (result) => invoke('export_copy', { result }),
+      exportBatch: (paths, options, run) => invoke('export_batch', { paths, options, run }),
+      onExportProgress: (cb) => subscribe('export-progress', cb),
+      exportCopyMany: (results) => invoke('export_copy_many', { results }),
+      exportSaveMany: (pairs) => invoke('export_save_many', { pairs }),
     },
     clipboard: {
       copyFiles: (paths) => invoke('copy_files', { paths }),

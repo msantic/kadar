@@ -3,7 +3,7 @@ import { createCell, assignCell, setCellThumb, positionCell, type CellHandle } f
 import { ThumbLoader } from './thumb-loader'
 import { subscribe, getState } from '../store'
 import {
-  copySelection, extendTo, openSelectionDefault, optimizeSelection, selectAll, selectedPaths, selectOnly, selectPath, toggle, trashSelection,
+  copySelection, exportSelection, extendTo, openSelectionDefault, optimizeSelection, selectAll, selectedPaths, selectOnly, selectPath, toggle, trashSelection,
 } from '../selection'
 import { on } from '../bus'
 import { showContextMenu } from '../context-menu'
@@ -147,9 +147,9 @@ export function createGrid(): GridHandle {
       } else if (key === 'c') {
         e.preventDefault()
         void copySelection(e.shiftKey)
-      } else if (key === 'e' && current >= 0 && entries[current]!.kind === 'image') {
+      } else if (key === 'e' && current >= 0) {
         e.preventDefault()
-        emit('export:open', { path: entries[current]!.path })
+        exportSelection()
       }
       return
     }

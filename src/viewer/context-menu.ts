@@ -6,7 +6,7 @@ import { Menu, MenuItem, PredefinedMenuItem } from '@tauri-apps/api/menu'
 import { emit } from './bus'
 import { getState } from './store'
 import {
-  copySelection, openSelectionDefault, optimizeSelection, selectedPaths, trashSelection,
+  copySelection, exportSelection, openSelectionDefault, optimizeSelection, selectedImages, selectedPaths, trashSelection,
 } from './selection'
 
 export async function showContextMenu(x: number, y: number): Promise<void> {
@@ -17,6 +17,7 @@ export async function showContextMenu(x: number, y: number): Promise<void> {
   const { entries, selectedPath } = getState()
   const focus = selectedPath ?? paths[0]!
   const focusIndex = entries.findIndex((e) => e.path === focus)
+  const images = selectedImages().length
 
   const separator = (): Promise<PredefinedMenuItem> => PredefinedMenuItem.new({ item: 'Separator' })
   const menu = await Menu.new({
@@ -57,10 +58,10 @@ export async function showContextMenu(x: number, y: number): Promise<void> {
       }),
       await separator(),
       await MenuItem.new({
-        text: 'Export for Web…',
+        text: images > 1 ? `Export ${images} Images for Web…` : 'Export for Web…',
         accelerator: 'Cmd+E',
-        enabled: !many && entries[focusIndex]?.kind === 'image',
-        action: () => emit('export:open', { path: focus }),
+        enabled: images > 0,
+        action: () => exportSelection(),
       }),
       await MenuItem.new({
         text: many ? `Optimize ${n} Files` : 'Optimize',

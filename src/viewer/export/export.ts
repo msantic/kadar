@@ -4,7 +4,8 @@
 
 import { on, emit } from '../bus'
 import { fileUrl } from '../ipc'
-import type { ExportOptions, ExportResult } from '../types'
+import { getState } from '../store'
+import type { BatchItem, ExportOptions, ExportResult } from '../types'
 
 interface Rect { x: number; y: number; w: number; h: number }
 type Handle = 'move' | 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
@@ -67,8 +68,11 @@ export function createExport(): HTMLElement {
   }
   const result = el('img', 'export-result')
   result.hidden = true
+  // Batch mode: a sheet of the results, each with its size.
+  const sheet = el('div', 'export-sheet')
+  sheet.hidden = true
   frame.append(img, cropBox)
-  stage.append(frame, result)
+  stage.append(frame, result, sheet)
 
   // ─── Settings panel ────────────────────────────────────────────────────────
   const panel = el('div', 'export-panel')
@@ -258,12 +262,55 @@ export function createExport(): HTMLElement {
   function options(): ExportOptions {
     const full = crop.x <= 0.0005 && crop.y <= 0.0005 && crop.w >= 0.999 && crop.h >= 0.999
     const w = Number(width.value)
+    // Batch: no rotation or free crop; a fixed shape is cut from each image's center.
+    const shape = ASPECTS[aspect.value]
     return {
-      turns,
-      crop: full ? null : crop,
+      turns: batch.length > 1 ? 0 : turns,
+      crop: batch.length > 1 || full ? null : crop,
+      aspect: batch.length > 1 && typeof shape === 'number' && shape > 0 ? shape : null,
       maxWidth: w > 0 ? w : null,
       format: format.value as ExportOptions['format'],
       quality: Number(quality.value),
+    }
+  }
+
+  // ─── Batch ─────────────────────────────────────────────────────────────────
+  let batch: string[] = []
+  let batchItems: BatchItem[] = []
+  let currentRun = 0
+  window.viewer.share.onExportProgress(({ run, done, total }) => {
+    if (run === currentRun) info.textContent = `Working…  ${done} / ${total}`
+  })
+
+  async function updateBatch(): Promise<void> {
+    const run = Date.now()
+    currentRun = run
+    batchItems = []
+    info.textContent = `Working…  0 / ${batch.length}`
+    try {
+      const items = await window.viewer.share.exportBatch(batch, options(), run)
+      if (run !== currentRun) return
+      batchItems = items
+      const done = items.filter((i) => i.result)
+      const total = done.reduce((sum, i) => sum + i.result!.bytes, 0)
+      const saving = sourceSize > 0 ? Math.min(99, Math.floor((1 - total / sourceSize) * 100)) : 0
+      const failed = items.length - done.length
+      info.textContent = `${done.length} images  ·  ${formatBytes(total)} total${saving > 0 ? `  ·  ${saving}% smaller` : ''}`
+        + (failed > 0 ? `  ·  ${failed} failed` : '')
+      sheet.replaceChildren(...items.map((i) => {
+        const tile = el('figure', 'export-tile')
+        if (i.result) {
+          const pic = el('img')
+          pic.src = fileUrl(i.result.path)
+          pic.draggable = false
+          tile.append(pic, el('figcaption', '', `${i.result.width} × ${i.result.height}  ·  ${formatBytes(i.result.bytes)}`))
+        } else {
+          tile.append(el('figcaption', 'export-tile-error', `${i.source.split('/').pop()}: ${i.error ?? 'failed'}`))
+        }
+        return tile
+      }))
+    } catch (err) {
+      if (run === currentRun) info.textContent = `Error: ${String(err)}`
     }
   }
 
@@ -273,13 +320,14 @@ export function createExport(): HTMLElement {
   }
 
   async function update(): Promise<void> {
+    if (batch.length > 1) return updateBatch()
     const mine = ++requestNo
     info.textContent = 'Working…'
     try {
       const r = await window.viewer.share.exportImage(path, options())
       if (mine !== requestNo) return
       latest = r
-      const saving = sourceSize > 0 ? Math.round((1 - r.bytes / sourceSize) * 100) : 0
+      const saving = sourceSize > 0 ? Math.min(99, Math.floor((1 - r.bytes / sourceSize) * 100)) : 0
       info.textContent = `${r.width} × ${r.height}  ·  ${formatBytes(r.bytes)}${saving > 0 ? `  ·  ${saving}% smaller` : ''}`
       if (showResult.checked) result.src = fileUrl(r.path)
     } catch (err) {
@@ -311,6 +359,17 @@ export function createExport(): HTMLElement {
   })
 
   async function copy(): Promise<void> {
+    if (batch.length > 1) {
+      const results = batchItems.flatMap((i) => (i.result ? [i.result.path] : []))
+      if (results.length === 0) return
+      try {
+        await window.viewer.share.exportCopyMany(results)
+        emit('toast', { text: `Copied ${results.length} files` })
+      } catch (err) {
+        emit('toast', { text: `Copy failed: ${String(err)}` })
+      }
+      return
+    }
     if (!latest) return
     try {
       await window.viewer.share.exportCopy(latest.path)
@@ -321,6 +380,21 @@ export function createExport(): HTMLElement {
   }
 
   async function save(): Promise<void> {
+    if (batch.length > 1) {
+      const pairs = batchItems.flatMap((i): [string, string][] => (i.result ? [[i.source, i.result.path]] : []))
+      if (pairs.length === 0) return
+      try {
+        const saved = await window.viewer.share.exportSaveMany(pairs)
+        const folder = saved[0]!.slice(0, saved[0]!.lastIndexOf('/'))
+        emit('toast', {
+          text: `Saved ${saved.length} files → "optimized" folder`,
+          action: { label: 'Show in Finder', run: () => void window.viewer.fs.openDefault(folder) },
+        })
+      } catch (err) {
+        emit('toast', { text: `Save failed: ${String(err)}` })
+      }
+      return
+    }
     if (!latest) return
     try {
       const saved = await window.viewer.share.exportSave(path, latest.path)
@@ -344,7 +418,7 @@ export function createExport(): HTMLElement {
     if (e.key === 'Escape') { e.preventDefault(); close() }
     else if (e.metaKey && e.key.toLowerCase() === 'c') { e.preventDefault(); void copy() }
     else if (e.metaKey && e.key.toLowerCase() === 's') { e.preventDefault(); void save() }
-    else if (!typing && !e.metaKey && e.key.toLowerCase() === 'r') { e.preventDefault(); rotRight.click() }
+    else if (!typing && !e.metaKey && batch.length <= 1 && e.key.toLowerCase() === 'r') { e.preventDefault(); rotRight.click() }
     else return
     e.stopImmediatePropagation()
   }, { capture: true })
@@ -353,11 +427,29 @@ export function createExport(): HTMLElement {
     root.hidden = true
     img.removeAttribute('src')
     result.removeAttribute('src')
+    sheet.replaceChildren()
     latest = null
+    batchItems = []
+    currentRun = 0
     requestNo++
   }
 
+  /** Single mode: rotate, free crop and "Show result"; batch mode: the results sheet. */
+  function setMode(many: boolean): void {
+    title.textContent = many ? `Export ${batch.length} Images for Web` : 'Export for Web'
+    rotateRow.hidden = many
+    resetCrop.hidden = many
+    showResultLabel.hidden = many
+    sheet.hidden = !many
+    frame.hidden = many
+    result.hidden = true
+    // A free crop needs a frame to drag; in batch mode it means "keep the whole image".
+    aspect.options[0]!.textContent = many ? 'Whole image' : 'Free'
+  }
+
   function open(p: string, size: number): void {
+    batch = [p]
+    setMode(false)
     path = p
     sourceSize = size
     turns = 0
@@ -372,7 +464,22 @@ export function createExport(): HTMLElement {
     img.src = fileUrl(p)
   }
 
-  on('export:open', ({ path: p }) => {
+  function openBatch(paths: string[]): void {
+    batch = paths
+    const sizes = new Map(getState().entries.map((e) => [e.path, e.size]))
+    sourceSize = paths.reduce((sum, p) => sum + (sizes.get(p) ?? 0), 0)
+    setMode(true)
+    qualityRow.hidden = format.value === 'png'
+    source.textContent = `${paths.length} images  ·  ${formatBytes(sourceSize)}`
+    sheet.replaceChildren()
+    root.hidden = false
+    schedule()
+  }
+
+  on('export:open', ({ paths }) => {
+    if (paths.length > 1) { openBatch(paths); return }
+    const p = paths[0]
+    if (!p) return
     void window.viewer.meta.get(p).then((m) => open(p, m.sizeBytes)).catch(() => open(p, 0))
   })
 

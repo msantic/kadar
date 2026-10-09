@@ -89,6 +89,18 @@ export async function copySelection(asPaths: boolean): Promise<void> {
 
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`
 
+/** The selected images (not videos or folders), in grid order. */
+export function selectedImages(): string[] {
+  const kinds = new Map(getState().entries.map((e) => [e.path, e.kind]))
+  return selectedPaths().filter((p) => kinds.get(p) === 'image')
+}
+
+/** ⌘E: Export for Web of the selected images (one opens the single-image editor). */
+export function exportSelection(): void {
+  const paths = selectedImages()
+  if (paths.length > 0) emit('export:open', { paths })
+}
+
 /** Cmd+Delete: moves the selected files to the Trash. The live folder then removes them. */
 export async function trashSelection(): Promise<void> {
   const paths = selectedPaths()
