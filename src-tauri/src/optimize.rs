@@ -181,7 +181,7 @@ pub fn optimize_image(src: &Path, dest: &Path, opts: &Options) -> Result<(), Str
     let img = macos::decode_for_web(src, opts.max_width)?;
     let bytes = match opts.image_format {
         ImageFormat::Webp => encode_webp(&img, 80.0),
-        ImageFormat::Jpg => encode_jpeg(&img)?,
+        ImageFormat::Jpg => encode_jpeg_q(&img, 80.0)?,
         ImageFormat::Png => encode_png(img, 2)?,
     };
     if let Some(dir) = dest.parent() {
@@ -202,13 +202,13 @@ pub fn encode_webp(img: &macos::Rgba, quality: f32) -> Vec<u8> {
     }
 }
 
-fn encode_jpeg(img: &macos::Rgba) -> Result<Vec<u8>, String> {
+pub fn encode_jpeg_q(img: &macos::Rgba, quality: f32) -> Result<Vec<u8>, String> {
     let rgb = to_rgb(img);
     // mozjpeg reports encoder errors by unwinding; catch them so one bad file fails alone.
     std::panic::catch_unwind(|| -> std::io::Result<Vec<u8>> {
         let mut comp = mozjpeg::Compress::new(mozjpeg::ColorSpace::JCS_RGB);
         comp.set_size(img.width as usize, img.height as usize);
-        comp.set_quality(80.0);
+        comp.set_quality(quality);
         let mut started = comp.start_compress(Vec::new())?;
         started.write_scanlines(&rgb)?;
         started.finish()

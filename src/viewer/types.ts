@@ -47,6 +47,23 @@ export interface FileMetadata {
   mtimeMs: number
 }
 
+export interface ExportOptions {
+  /** Clockwise quarter turns, 0–3. */
+  turns: number
+  /** Part of the rotated image as fractions 0–1; null keeps all of it. */
+  crop: { x: number; y: number; w: number; h: number } | null
+  maxWidth: number | null
+  format: 'webp' | 'jpg' | 'png'
+  quality: number
+}
+
+export interface ExportResult {
+  width: number
+  height: number
+  bytes: number
+  path: string
+}
+
 export type Unsubscribe = () => void
 
 export interface ViewerAPI {
@@ -86,6 +103,12 @@ export interface ViewerAPI {
     startDrag: (paths: string[], icon: string) => Promise<void>
     /** Web copies with the Optimize tab's settings. Returns how many files it took. */
     optimize: (paths: string[]) => Promise<number>
+    /** "Export for web": makes the result for these settings. */
+    exportImage: (path: string, options: ExportOptions) => Promise<ExportResult>
+    /** Saves an export result into the "optimized" folder; returns its path. */
+    exportSave: (source: string, result: string) => Promise<string>
+    /** Copies an export result to the clipboard. */
+    exportCopy: (result: string) => Promise<void>
   }
   clipboard: {
     copyFiles: (paths: string[]) => Promise<void>

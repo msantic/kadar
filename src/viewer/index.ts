@@ -2,6 +2,7 @@ import { api } from './ipc'
 import { emit, on } from './bus'
 import { getSession, updateSession } from './session'
 import { restoreSelection } from './selection'
+import { createExport } from './export/export'
 import { defaultDescending, SORT_LABELS, sortEntries, type SortBy } from './sort'
 import type { FileEntry } from './types'
 import { filterEntries } from './filter'
@@ -159,7 +160,7 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
 
   main.append(toolbar, grid.root)
   layout.append(sidebar, main)
-  panel.append(layout, lightbox.root)
+  panel.append(layout, lightbox.root, createExport())
 
   on('folder:request', ({ path }) => {
     if (getState().currentFolder === path) return

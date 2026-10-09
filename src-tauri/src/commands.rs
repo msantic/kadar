@@ -111,6 +111,25 @@ pub fn taken_dates(taken: State<'_, crate::taken::TakenDates>, files: Vec<crate:
     taken.get(files)
 }
 
+/// "Export for web": makes the result for these settings and returns its size and temp path.
+#[tauri::command(async)]
+pub fn export_image(app: AppHandle, path: String, options: crate::export::ExportOptions) -> Result<crate::export::ExportResult, String> {
+    let dir = app.path().app_cache_dir().map_err(|e| e.to_string())?.join("export");
+    crate::export::export(&path, &options, &dir)
+}
+
+/// Saves an export result into the "optimized" folder next to the source. Returns its path.
+#[tauri::command(async)]
+pub fn export_save(source: String, result: String) -> Result<String, String> {
+    crate::export::save_next_to(&source, &result)
+}
+
+/// Copies an export result: the file, plus its picture for pasting into web pages.
+#[tauri::command(async)]
+pub fn export_copy(app: AppHandle, result: String) -> Result<(), String> {
+    clipboard::copy_files(&app, vec![result])
+}
+
 /// Files that Finder asked Kadar to open, not yet shown.
 #[derive(Default)]
 pub struct OpenedFiles(pub std::sync::Mutex<Vec<String>>);

@@ -1,6 +1,7 @@
 mod capture;
 mod clipboard;
 mod commands;
+mod export;
 mod favorites;
 mod formats;
 mod fs_scan;
@@ -53,6 +54,9 @@ pub fn run() {
             commands::trash_files,
             commands::rename_file,
             commands::taken_dates,
+            commands::export_image,
+            commands::export_save,
+            commands::export_copy,
             commands::take_opened,
             commands::open_default,
             commands::watch_folder,

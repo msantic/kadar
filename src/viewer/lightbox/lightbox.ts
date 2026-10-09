@@ -1,4 +1,4 @@
-import { on } from '../bus'
+import { emit, on } from '../bus'
 import { getState, setState, subscribe } from '../store'
 import { fileUrl } from '../ipc'
 import { updateSession } from '../session'
@@ -47,11 +47,17 @@ export function createLightbox(): LightboxHandle {
   close.textContent = '×'
   close.addEventListener('click', () => hide())
 
+  const exportBtn = document.createElement('button')
+  exportBtn.className = 'viewer-lightbox-export'
+  exportBtn.textContent = 'Export for Web…'
+  exportBtn.title = 'Rotate, crop and size this image for the web (⌘E)'
+  exportBtn.addEventListener('click', () => { if (current) emit('export:open', { path: current.path }) })
+
   const caption = document.createElement('div')
   caption.className = 'viewer-lightbox-caption'
 
   stage.append(img, video)
-  root.append(close, stage, caption)
+  root.append(close, exportBtn, stage, caption)
 
   // Zoom state of the shown image: screen position = translate + scale × image pixel.
   let scale = 1
@@ -239,6 +245,7 @@ export function createLightbox(): LightboxHandle {
     updateSession({ bigView: true })
     root.hidden = false
 
+    exportBtn.hidden = entry.kind !== 'image'
     if (entry.kind === 'video') {
       img.hidden = true
       video.hidden = false
@@ -280,6 +287,7 @@ export function createLightbox(): LightboxHandle {
     const zoomable = !img.hidden
     // Cmd+C copies the shown file, Shift+Cmd+C its path, as in the grid.
     if (e.metaKey && e.key.toLowerCase() === 'c') { void copySelection(e.shiftKey); e.preventDefault(); return }
+    if (e.metaKey && e.key.toLowerCase() === 'e' && current?.kind === 'image') { emit('export:open', { path: current.path }); e.preventDefault(); return }
     if (e.metaKey) return
     if (e.key === 'Escape') { hide(); e.preventDefault() }
     else if (e.key === 'ArrowRight') { step(1); e.preventDefault() }

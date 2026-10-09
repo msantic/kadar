@@ -1,0 +1,377 @@
+// "Export for web" of one image. Left: the image with a crop frame. Right: rotate, crop shape,
+// width, format and quality. Every change makes the real result in Rust, so the size shown is
+// exact, and "Show result" shows the compressed picture itself. Copy or Save uses that result.
+
+import { on, emit } from '../bus'
+import { fileUrl } from '../ipc'
+import type { ExportOptions, ExportResult } from '../types'
+
+interface Rect { x: number; y: number; w: number; h: number }
+type Handle = 'move' | 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
+
+const SETTINGS_KEY = 'kadar:export'
+const MIN_CROP_PX = 24
+const ASPECTS: Record<string, number | null> = {
+  free: null, original: -1, '1:1': 1, '4:5': 4 / 5, '4:3': 4 / 3, '3:2': 3 / 2, '16:9': 16 / 9, '9:16': 9 / 16,
+}
+const WIDTHS = [0, 3840, 2560, 1920, 1600, 1200, 1080, 800, 640, 400]
+
+interface Settings { aspect: string; width: number; format: ExportOptions['format']; quality: number }
+
+function loadSettings(): Settings {
+  const fallback: Settings = { aspect: 'free', width: 1600, format: 'webp', quality: 80 }
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    return raw ? { ...fallback, ...(JSON.parse(raw) as Partial<Settings>) } : fallback
+  } catch { return fallback }
+}
+
+function saveSettings(s: Settings): void {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)) } catch { /* not kept */ }
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
+  return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
+
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
+  const e = document.createElement(tag)
+  if (cls) e.className = cls
+  if (text !== undefined) e.textContent = text
+  return e
+}
+
+function labeled(label: string, control: HTMLElement): HTMLElement {
+  const row = el('label', 'export-row')
+  row.append(el('span', 'export-label', label), control)
+  return row
+}
+
+export function createExport(): HTMLElement {
+  const settings = loadSettings()
+
+  const root = el('div', 'export')
+  root.hidden = true
+  const stage = el('div', 'export-stage')
+  const frame = el('div', 'export-frame')       // the rotated image, fitted to the stage
+  const img = el('img', 'export-img')
+  img.draggable = false
+  const cropBox = el('div', 'export-crop')
+  const handles: Handle[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']
+  for (const h of handles) {
+    const d = el('div', `export-handle export-handle-${h}`)
+    d.dataset['handle'] = h
+    cropBox.append(d)
+  }
+  const result = el('img', 'export-result')
+  result.hidden = true
+  frame.append(img, cropBox)
+  stage.append(frame, result)
+
+  // ─── Settings panel ────────────────────────────────────────────────────────
+  const panel = el('div', 'export-panel')
+  const title = el('div', 'export-title', 'Export for Web')
+  const source = el('div', 'export-source')
+
+  const rotateRow = el('div', 'export-buttons')
+  const rotLeft = el('button', 'export-btn', '⟲ Rotate Left')
+  const rotRight = el('button', 'export-btn', '⟳ Rotate Right')
+  rotateRow.append(rotLeft, rotRight)
+
+  const aspect = el('select', 'export-select')
+  for (const [value, label] of [['free', 'Free'], ['original', 'Original'], ['1:1', 'Square 1:1'], ['4:5', 'Portrait 4:5'],
+    ['4:3', '4:3'], ['3:2', '3:2'], ['16:9', 'Wide 16:9'], ['9:16', 'Story 9:16']] as const) {
+    aspect.append(new Option(label, value))
+  }
+  aspect.value = settings.aspect
+  const resetCrop = el('button', 'export-link', 'Reset')
+
+  const width = el('select', 'export-select')
+  for (const w of WIDTHS) width.append(new Option(w === 0 ? 'Original size' : `${w} px wide`, String(w)))
+  width.value = String(settings.width)
+
+  const format = el('select', 'export-select')
+  for (const [value, label] of [['webp', 'WebP'], ['jpg', 'JPG'], ['png', 'PNG (lossless)']] as const) format.append(new Option(label, value))
+  format.value = settings.format
+
+  const quality = el('input', 'export-range')
+  quality.type = 'range'
+  quality.min = '30'
+  quality.max = '100'
+  quality.value = String(settings.quality)
+  const qualityValue = el('span', 'export-value', String(settings.quality))
+  const qualityWrap = el('div', 'export-inline')
+  qualityWrap.append(quality, qualityValue)
+  const qualityRow = labeled('Quality', qualityWrap)
+
+  const info = el('div', 'export-info', '…')
+  const showResultLabel = el('label', 'export-check')
+  const showResult = el('input')
+  showResult.type = 'checkbox'
+  showResultLabel.append(showResult, document.createTextNode(' Show result'))
+
+  const actions = el('div', 'export-buttons')
+  const copyBtn = el('button', 'export-btn export-primary', 'Copy')
+  copyBtn.title = 'Copy the result (⌘C)'
+  const saveBtn = el('button', 'export-btn', 'Save')
+  saveBtn.title = 'Save into the "optimized" folder next to the image (⌘S)'
+  const closeBtn = el('button', 'export-btn', 'Close')
+  actions.append(copyBtn, saveBtn, closeBtn)
+
+  const cropRow = el('div', 'export-inline')
+  cropRow.append(aspect, resetCrop)
+  panel.append(
+    title, source, rotateRow, labeled('Crop', cropRow), labeled('Width', width), labeled('Format', format),
+    qualityRow, info, showResultLabel, actions,
+  )
+  root.append(stage, panel)
+
+  // ─── State ─────────────────────────────────────────────────────────────────
+  let path = ''
+  let sourceSize = 0
+  let turns = 0
+  let crop: Rect = { x: 0, y: 0, w: 1, h: 1 } // fractions of the rotated image
+  let latest: ExportResult | null = null
+  let requestNo = 0
+  let timer: ReturnType<typeof setTimeout> | null = null
+
+  const rotated = (): { w: number; h: number } => {
+    const w = img.naturalWidth || 1
+    const h = img.naturalHeight || 1
+    return turns % 2 === 1 ? { w: h, h: w } : { w, h }
+  }
+
+  /** Ratio width / height in rotated pixels, or null for a free crop. */
+  function ratio(): number | null {
+    const r = ASPECTS[aspect.value]
+    if (r === undefined || r === null) return null
+    if (r === -1) { const d = rotated(); return d.w / d.h }
+    return r
+  }
+
+  /** The largest centered crop with the chosen shape. */
+  function fullCrop(): void {
+    const r = ratio()
+    const d = rotated()
+    if (r === null) { crop = { x: 0, y: 0, w: 1, h: 1 }; return }
+    let w = d.w
+    let h = w / r
+    if (h > d.h) { h = d.h; w = h * r }
+    crop = { x: (d.w - w) / 2 / d.w, y: (d.h - h) / 2 / d.h, w: w / d.w, h: h / d.h }
+  }
+
+  // ─── Layout ────────────────────────────────────────────────────────────────
+  function layout(): void {
+    const d = rotated()
+    const availW = Math.max(1, stage.clientWidth - 48)
+    const availH = Math.max(1, stage.clientHeight - 48)
+    const s = Math.min(availW / d.w, availH / d.h)
+    const fw = d.w * s
+    const fh = d.h * s
+    frame.style.width = `${fw}px`
+    frame.style.height = `${fh}px`
+    // The image keeps its own size and turns about its center inside the frame.
+    const iw = (img.naturalWidth || 1) * s
+    const ih = (img.naturalHeight || 1) * s
+    img.style.width = `${iw}px`
+    img.style.height = `${ih}px`
+    img.style.left = `${(fw - iw) / 2}px`
+    img.style.top = `${(fh - ih) / 2}px`
+    img.style.transform = `rotate(${turns * 90}deg)`
+    drawCrop()
+  }
+
+  function drawCrop(): void {
+    const fw = frame.clientWidth
+    const fh = frame.clientHeight
+    cropBox.style.left = `${crop.x * fw}px`
+    cropBox.style.top = `${crop.y * fh}px`
+    cropBox.style.width = `${crop.w * fw}px`
+    cropBox.style.height = `${crop.h * fh}px`
+    cropBox.classList.toggle('locked', ratio() !== null)
+  }
+
+  new ResizeObserver(() => { if (!root.hidden) layout() }).observe(stage)
+
+  // ─── Crop dragging ─────────────────────────────────────────────────────────
+  let drag: { handle: Handle; x: number; y: number; start: Rect } | null = null
+
+  cropBox.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return
+    const target = e.target as HTMLElement
+    const handle = (target.dataset['handle'] as Handle | undefined) ?? 'move'
+    drag = { handle, x: e.clientX, y: e.clientY, start: { ...crop } }
+    cropBox.setPointerCapture(e.pointerId)
+    e.preventDefault()
+  })
+
+  cropBox.addEventListener('pointermove', (e) => {
+    if (!drag) return
+    const fw = frame.clientWidth
+    const fh = frame.clientHeight
+    const dx = (e.clientX - drag.x) / fw
+    const dy = (e.clientY - drag.y) / fh
+    const s = drag.start
+    const minW = MIN_CROP_PX / fw
+    const minH = MIN_CROP_PX / fh
+    let { x, y, w, h } = s
+    const hs = drag.handle
+    if (hs === 'move') {
+      x = Math.min(Math.max(0, s.x + dx), 1 - s.w)
+      y = Math.min(Math.max(0, s.y + dy), 1 - s.h)
+    } else {
+      if (hs.includes('e')) w = Math.min(Math.max(minW, s.w + dx), 1 - s.x)
+      if (hs.includes('s')) h = Math.min(Math.max(minH, s.h + dy), 1 - s.y)
+      if (hs.includes('w')) { const nx = Math.min(Math.max(0, s.x + dx), s.x + s.w - minW); w = s.w + (s.x - nx); x = nx }
+      if (hs.includes('n')) { const ny = Math.min(Math.max(0, s.y + dy), s.y + s.h - minH); h = s.h + (s.y - ny); y = ny }
+      const r = ratio()
+      if (r !== null) {
+        // Keep the shape: height follows width (in screen pixels), anchored at the far corner.
+        const nh = (w * fw) / r / fh
+        const fixedTop = hs.includes('s')
+        let ny = fixedTop ? y : y + h - nh
+        let hh = nh
+        if (ny < 0) { hh += ny; ny = 0 }
+        if (ny + hh > 1) hh = 1 - ny
+        const nw = (hh * fh * r) / fw
+        if (hs.includes('w')) x = x + w - nw
+        w = nw
+        h = hh
+        y = ny
+      }
+    }
+    crop = { x, y, w, h }
+    drawCrop()
+  })
+
+  const endDrag = (): void => {
+    if (!drag) return
+    drag = null
+    schedule()
+  }
+  cropBox.addEventListener('pointerup', endDrag)
+  cropBox.addEventListener('pointercancel', endDrag)
+
+  // ─── Result ────────────────────────────────────────────────────────────────
+  function options(): ExportOptions {
+    const full = crop.x <= 0.0005 && crop.y <= 0.0005 && crop.w >= 0.999 && crop.h >= 0.999
+    const w = Number(width.value)
+    return {
+      turns,
+      crop: full ? null : crop,
+      maxWidth: w > 0 ? w : null,
+      format: format.value as ExportOptions['format'],
+      quality: Number(quality.value),
+    }
+  }
+
+  function schedule(): void {
+    if (timer !== null) clearTimeout(timer)
+    timer = setTimeout(() => void update(), 120)
+  }
+
+  async function update(): Promise<void> {
+    const mine = ++requestNo
+    info.textContent = 'Working…'
+    try {
+      const r = await window.viewer.share.exportImage(path, options())
+      if (mine !== requestNo) return
+      latest = r
+      const saving = sourceSize > 0 ? Math.round((1 - r.bytes / sourceSize) * 100) : 0
+      info.textContent = `${r.width} × ${r.height}  ·  ${formatBytes(r.bytes)}${saving > 0 ? `  ·  ${saving}% smaller` : ''}`
+      if (showResult.checked) result.src = fileUrl(r.path)
+    } catch (err) {
+      if (mine === requestNo) info.textContent = `Error: ${String(err)}`
+    }
+  }
+
+  function remember(): void {
+    saveSettings({ aspect: aspect.value, width: Number(width.value), format: format.value as Settings['format'], quality: Number(quality.value) })
+  }
+
+  // ─── Controls ──────────────────────────────────────────────────────────────
+  rotLeft.addEventListener('click', () => { turns = (turns + 3) % 4; fullCrop(); layout(); schedule() })
+  rotRight.addEventListener('click', () => { turns = (turns + 1) % 4; fullCrop(); layout(); schedule() })
+  aspect.addEventListener('change', () => { fullCrop(); drawCrop(); remember(); schedule() })
+  resetCrop.addEventListener('click', () => { fullCrop(); drawCrop(); schedule() })
+  width.addEventListener('change', () => { remember(); schedule() })
+  format.addEventListener('change', () => {
+    qualityRow.hidden = format.value === 'png'
+    remember()
+    schedule()
+  })
+  quality.addEventListener('input', () => { qualityValue.textContent = quality.value })
+  quality.addEventListener('change', () => { remember(); schedule() })
+  showResult.addEventListener('change', () => {
+    frame.hidden = showResult.checked
+    result.hidden = !showResult.checked
+    if (showResult.checked && latest) result.src = fileUrl(latest.path)
+  })
+
+  async function copy(): Promise<void> {
+    if (!latest) return
+    try {
+      await window.viewer.share.exportCopy(latest.path)
+      emit('toast', { text: `Copied ${latest.width} × ${latest.height} · ${formatBytes(latest.bytes)}` })
+    } catch (err) {
+      emit('toast', { text: `Copy failed: ${String(err)}` })
+    }
+  }
+
+  async function save(): Promise<void> {
+    if (!latest) return
+    try {
+      const saved = await window.viewer.share.exportSave(path, latest.path)
+      emit('toast', { text: `Saved → optimized/${saved.split('/').pop()}` })
+    } catch (err) {
+      emit('toast', { text: `Save failed: ${String(err)}` })
+    }
+  }
+
+  copyBtn.addEventListener('click', () => void copy())
+  saveBtn.addEventListener('click', () => void save())
+  closeBtn.addEventListener('click', () => close())
+
+  // Keys while open; they stop here, so the grid and the big view behind do not react.
+  window.addEventListener('keydown', (e) => {
+    if (root.hidden) return
+    const typing = (e.target as HTMLElement | null)?.tagName === 'SELECT'
+    if (e.key === 'Escape') { e.preventDefault(); close() }
+    else if (e.metaKey && e.key.toLowerCase() === 'c') { e.preventDefault(); void copy() }
+    else if (e.metaKey && e.key.toLowerCase() === 's') { e.preventDefault(); void save() }
+    else if (!typing && !e.metaKey && e.key.toLowerCase() === 'r') { e.preventDefault(); rotRight.click() }
+    else return
+    e.stopImmediatePropagation()
+  }, { capture: true })
+
+  function close(): void {
+    root.hidden = true
+    img.removeAttribute('src')
+    result.removeAttribute('src')
+    latest = null
+    requestNo++
+  }
+
+  function open(p: string, size: number): void {
+    path = p
+    sourceSize = size
+    turns = 0
+    latest = null
+    showResult.checked = false
+    frame.hidden = false
+    result.hidden = true
+    qualityRow.hidden = format.value === 'png'
+    source.textContent = `${p.split('/').pop()}  ·  ${formatBytes(size)}`
+    root.hidden = false
+    img.onload = () => { fullCrop(); layout(); schedule() }
+    img.src = fileUrl(p)
+  }
+
+  on('export:open', ({ path: p }) => {
+    void window.viewer.meta.get(p).then((m) => open(p, m.sizeBytes)).catch(() => open(p, 0))
+  })
+
+  return root
+}

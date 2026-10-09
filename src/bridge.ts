@@ -50,6 +50,9 @@ export function installViewerBridge(): void {
     share: {
       startDrag: (paths, icon) => startDrag({ item: paths, icon, mode: 'copy' }),
       optimize:  (paths) => optimizePaths(paths),
+      exportImage: (path, options) => invoke('export_image', { path, options }),
+      exportSave:  (source, result) => invoke('export_save', { source, result }),
+      exportCopy:  (result) => invoke('export_copy', { result }),
     },
     clipboard: {
       copyFiles: (paths) => invoke('copy_files', { paths }),

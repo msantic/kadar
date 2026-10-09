@@ -143,6 +143,9 @@ export function createGrid(): GridHandle {
       } else if (key === 'c') {
         e.preventDefault()
         void copySelection(e.shiftKey)
+      } else if (key === 'e' && current >= 0 && entries[current]!.kind === 'image') {
+        e.preventDefault()
+        emit('export:open', { path: entries[current]!.path })
       }
       return
     }

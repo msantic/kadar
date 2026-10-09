@@ -7,6 +7,7 @@ export interface BusEvents {
   'toast': { text: string }
   'folder:refresh': void
   'rename:start': void
+  'export:open': { path: string }
 }
 
 type Handler<K extends keyof BusEvents> = (payload: BusEvents[K]) => void

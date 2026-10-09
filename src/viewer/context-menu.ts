@@ -52,6 +52,12 @@ export async function showContextMenu(x: number, y: number): Promise<void> {
       }),
       await separator(),
       await MenuItem.new({
+        text: 'Export for Web…',
+        accelerator: 'Cmd+E',
+        enabled: !many && entries[focusIndex]?.kind === 'image',
+        action: () => emit('export:open', { path: focus }),
+      }),
+      await MenuItem.new({
         text: many ? `Optimize ${n} Files` : 'Optimize',
         action: () => void optimizeSelection(),
       }),
