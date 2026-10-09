@@ -1,7 +1,7 @@
 import { api } from './ipc'
 import { emit, on } from './bus'
 import { getSession, updateSession } from './session'
-import { optimizeSelection, restoreSelection, selectedPaths } from './selection'
+import { restoreSelection } from './selection'
 import { defaultDescending, SORT_LABELS, sortEntries, type SortBy } from './sort'
 import type { FileEntry } from './types'
 import { filterEntries } from './filter'
@@ -104,23 +104,6 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     void resort()
   })
 
-  // Web copies of the selected files, with the Optimize tab's settings.
-  const optimizeBtn = document.createElement('button')
-  optimizeBtn.className = 'viewer-ghost-btn viewer-optimize-btn'
-  optimizeBtn.title = 'Make web copies in an "optimized" folder, with the Optimize tab settings'
-  optimizeBtn.hidden = true
-  optimizeBtn.addEventListener('click', async () => {
-    optimizeBtn.disabled = true
-    await optimizeSelection()
-    optimizeBtn.disabled = false
-  })
-  subscribe((s, prev) => {
-    if (s.selection === prev.selection && s.selectedPath === prev.selectedPath) return
-    const n = selectedPaths().length
-    optimizeBtn.hidden = n === 0
-    optimizeBtn.textContent = n > 1 ? `Optimize ${n}` : 'Optimize'
-  })
-
   // Name filter: shows only files whose names contain the typed words. Cmd+F jumps here,
   // Esc clears it. Kept between launches; opening another folder clears it.
   const filterInput = document.createElement('input')
@@ -160,7 +143,7 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     }
   })
 
-  toolbar.append(openBtn, pathEl, countEl, optimizeBtn, filterInput, sortSelect, sortDirBtn, sizeControl)
+  toolbar.append(openBtn, pathEl, countEl, filterInput, sortSelect, sortDirBtn, sizeControl)
 
   const grid = createGrid()
   const lightbox = createLightbox()

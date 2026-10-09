@@ -375,8 +375,6 @@
   pointer-events: none;
 }
 
-.viewer-optimize-btn { flex-shrink: 0; color: var(--accent); }
-.viewer-optimize-btn:disabled { opacity: 0.5; cursor: default; }
 
 /* Name filter in the toolbar */
 .viewer-filter {
