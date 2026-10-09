@@ -4,6 +4,7 @@ import { fileUrl } from '../ipc'
 import { updateSession } from '../session'
 import { copySelection, selectOnly } from '../selection'
 import type { FileEntry } from '../types'
+import { createInfoPanel } from '../info/info'
 
 export interface LightboxHandle {
   root: HTMLElement
@@ -53,11 +54,20 @@ export function createLightbox(): LightboxHandle {
   exportBtn.title = 'Rotate, crop and size this image for the web (⌘E)'
   exportBtn.addEventListener('click', () => { if (current) emit('export:open', { path: current.path }) })
 
+  // Info panel on the right; the stage narrows so the image stays fully visible.
+  const info = createInfoPanel(() => root.classList.toggle('with-info', info.isOpen()))
+  root.classList.toggle('with-info', info.isOpen())
+  const infoBtn = document.createElement('button')
+  infoBtn.className = 'viewer-lightbox-info-btn'
+  infoBtn.textContent = 'Info'
+  infoBtn.title = 'Show or hide details (I)'
+  infoBtn.addEventListener('click', () => info.toggle())
+
   const caption = document.createElement('div')
   caption.className = 'viewer-lightbox-caption'
 
   stage.append(img, video)
-  root.append(close, exportBtn, stage, caption)
+  root.append(close, exportBtn, infoBtn, stage, caption, info.root)
 
   // Zoom state of the shown image: screen position = translate + scale × image pixel.
   let scale = 1
@@ -246,6 +256,7 @@ export function createLightbox(): LightboxHandle {
     root.hidden = false
 
     exportBtn.hidden = entry.kind !== 'image'
+    info.show(entry)
     if (entry.kind === 'video') {
       img.hidden = true
       video.hidden = false
@@ -288,6 +299,7 @@ export function createLightbox(): LightboxHandle {
     // Cmd+C copies the shown file, Shift+Cmd+C its path, as in the grid.
     if (e.metaKey && e.key.toLowerCase() === 'c') { void copySelection(e.shiftKey); e.preventDefault(); return }
     if (e.metaKey && e.key.toLowerCase() === 'e' && current?.kind === 'image') { emit('export:open', { path: current.path }); e.preventDefault(); return }
+    if (e.key.toLowerCase() === 'i' && !e.altKey && !e.ctrlKey) { info.toggle(); e.preventDefault(); return }
     if (e.metaKey) return
     if (e.key === 'Escape') { hide(); e.preventDefault() }
     else if (e.key === 'ArrowRight') { step(1); e.preventDefault() }
@@ -304,6 +316,9 @@ export function createLightbox(): LightboxHandle {
     else if (e.key === ' ' || e.key === 'Enter') { hide(); e.preventDefault() }
   }
   window.addEventListener('keydown', keyHandler)
+
+  on('info:toggle', () => info.toggle())
+  on('info:show', () => { if (!info.isOpen()) info.toggle() })
 
   const off1 = on('lightbox:open',  ({ index }) => show(index))
   const off2 = on('lightbox:close', () => hide())

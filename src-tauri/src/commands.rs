@@ -130,6 +130,12 @@ pub fn export_copy(app: AppHandle, result: String) -> Result<(), String> {
     clipboard::copy_files(&app, vec![result])
 }
 
+/// All header details of an image, for the info panel; null for files the Mac cannot read.
+#[tauri::command(async)]
+pub fn image_properties(path: String) -> Option<serde_json::Value> {
+    macos::image_properties(Path::new(&path))
+}
+
 /// Files that Finder asked Kadar to open, not yet shown.
 #[derive(Default)]
 pub struct OpenedFiles(pub std::sync::Mutex<Vec<String>>);

@@ -7,7 +7,7 @@ use std::path::Path;
 use objc2::rc::autoreleasepool;
 use objc2_av_foundation::{AVAsset, AVAssetImageGenerator};
 use objc2_core_foundation::{
-    CFBoolean, CFDictionary, CFMutableData, CFNumber, CFRetained, CFString, CFType, CFURL, CGSize,
+    CFArray, CFBoolean, CFDictionary, CFMutableData, CFNumber, CFRetained, CFString, CFType, CFURL, CGSize,
 };
 use objc2_core_foundation::{CGPoint, CGRect};
 use objc2_core_graphics::{
@@ -289,3 +289,44 @@ mod tests {
         assert_eq!(b - a, 10_000.0);
     }
 }
+
+/// Every detail the Mac reads from an image header (size, color, camera, lens, GPS, ...) as JSON,
+/// for the info panel. Groups keep their names, for example "{Exif}" and "{GPS}".
+pub fn image_properties(path: &Path) -> Option<serde_json::Value> {
+    let src = source(path).ok()?;
+    let props = unsafe { src.properties_at_index(0, None) }?;
+    Some(cf_to_json(&props))
+}
+
+fn cf_to_json(value: &CFType) -> serde_json::Value {
+    use serde_json::Value;
+    if let Some(s) = value.downcast_ref::<CFString>() {
+        return Value::String(s.to_string());
+    }
+    if let Some(b) = value.downcast_ref::<CFBoolean>() {
+        return Value::Bool(b.as_bool());
+    }
+    if let Some(n) = value.downcast_ref::<CFNumber>() {
+        return if n.is_float_type() {
+            n.as_f64().and_then(serde_json::Number::from_f64).map_or(Value::Null, Value::Number)
+        } else {
+            n.as_i64().map_or(Value::Null, |i| Value::Number(i.into()))
+        };
+    }
+    if let Some(d) = value.downcast_ref::<CFDictionary>() {
+        let d: &CFDictionary<CFType, CFType> = unsafe { &*(d as *const CFDictionary as *const CFDictionary<CFType, CFType>) };
+        let (keys, values) = d.to_vecs();
+        let map = keys
+            .iter()
+            .zip(values.iter())
+            .filter_map(|(k, v)| Some((k.downcast_ref::<CFString>()?.to_string(), cf_to_json(v))))
+            .collect();
+        return Value::Object(map);
+    }
+    if let Some(a) = value.downcast_ref::<CFArray>() {
+        let a: &CFArray<CFType> = unsafe { &*(a as *const CFArray as *const CFArray<CFType>) };
+        return Value::Array((0..a.len()).filter_map(|i| a.get(i)).map(|v| cf_to_json(&v)).collect());
+    }
+    Value::Null
+}
+

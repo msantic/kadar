@@ -58,6 +58,14 @@ initOptimize(() => activeTab === 'optimize')
 let saved: string | null = null
 try { saved = localStorage.getItem('persist:active-tab') } catch { /* private mode */ }
 
+// Menu bar: tabs switch here; everything else is a viewer command, shown in the viewer.
+void listen<string>('menu', (e) => {
+  const id = e.payload
+  if (id.startsWith('tab:')) { switchTab(id.slice(4)); return }
+  switchTab('viewer')
+  void import('./viewer/bus').then(({ emit }) => emit('menu', { id }))
+})
+
 // Files opened from Finder: at launch they wait in Rust; later ones announce themselves.
 // Listen first, then take, so none is missed in between.
 const takeOpened = (): Promise<OpenItem[]> => invoke<OpenItem[]>('take_opened')

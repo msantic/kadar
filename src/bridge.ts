@@ -46,6 +46,8 @@ export function installViewerBridge(): void {
     },
     meta: {
       get: (filePath) => invoke('meta_get', { filePath }),
+      properties: (filePath) => invoke('image_properties', { path: filePath }),
+      openUrl: (url) => invoke('open_external', { url }),
     },
     share: {
       startDrag: (paths, icon) => startDrag({ item: paths, icon, mode: 'copy' }),

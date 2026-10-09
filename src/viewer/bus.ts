@@ -9,6 +9,10 @@ export interface BusEvents {
   'folder:refresh': void
   'rename:start': void
   'export:open': { path: string }
+  /** A menu bar item, by its id. */
+  'menu': { id: string }
+  'info:toggle': void
+  'info:show': void
 }
 
 type Handler<K extends keyof BusEvents> = (payload: BusEvents[K]) => void

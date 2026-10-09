@@ -23,7 +23,7 @@ uuid = { version = "1.27.0", features = ["v4"] }
 # macOS frameworks: ImageIO decodes and scales images, AVFoundation reads video frames.
 objc2 = "0.6.5"
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSURL", "NSError", "NSArray", "NSObject", "NSFileManager"] }
-objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFString", "CFDictionary", "CFNumber", "CFURL", "CFCGTypes", "CFData"] }
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFString", "CFDictionary", "CFNumber", "CFURL", "CFCGTypes", "CFData", "CFArray"] }
 objc2-core-graphics = { version = "0.3.2", default-features = false, features = ["std", "CGImage", "CGContext", "CGColorSpace", "CGBitmapContext", "CGWindow"] }
 objc2-image-io = { version = "0.3.2", default-features = false, features = ["std", "CGImageSource", "CGImageDestination", "CGImageProperties", "objc2-core-graphics"] }
 objc2-av-foundation = { version = "0.3.2", default-features = false, features = ["std", "block2", "AVAsset", "AVAssetImageGenerator", "AVCaptureDevice", "AVMediaFormat", "AVVideoSettings", "objc2-core-foundation", "objc2-core-graphics", "objc2-core-media"] }

@@ -97,6 +97,10 @@ export interface ViewerAPI {
   }
   meta: {
     get: (filePath: string) => Promise<FileMetadata>
+    /** All header details of an image (camera, lens, GPS, color), grouped as the Mac names them. */
+    properties: (filePath: string) => Promise<Record<string, unknown> | null>
+    /** Opens a web address (https) in its app, for example a map. */
+    openUrl: (url: string) => Promise<void>
   }
   share: {
     /** Native drag of files out of Kadar, into Finder, a browser or a chat. */

@@ -1,7 +1,9 @@
 import { api } from './ipc'
 import { emit, on } from './bus'
 import { getSession, updateSession } from './session'
-import { restoreSelection } from './selection'
+import {
+  copySelection, openSelectionDefault, optimizeSelection, restoreSelection, selectedPaths, trashSelection,
+} from './selection'
 import { createExport } from './export/export'
 import { defaultDescending, SORT_LABELS, sortEntries, type SortBy } from './sort'
 import type { FileEntry } from './types'
@@ -303,6 +305,43 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     toast.hidden = false
     if (toastTimer !== null) clearTimeout(toastTimer)
     toastTimer = setTimeout(() => { toast.hidden = true }, action ? 5000 : 1600)
+  })
+
+  // Menu bar items (the keys mostly arrive directly; the menu also works with a click).
+  on('menu', ({ id }) => {
+    const { entries, selectedPath, lightboxIndex } = getState()
+    const focus = selectedPath ?? selectedPaths()[0] ?? null
+    const focusEntry = entries.find((e) => e.path === focus)
+    if (id.startsWith('sort:')) {
+      if (id === 'sort:reverse') sortDirBtn.click()
+      else { sortSelect.value = id.slice(5); sortSelect.dispatchEvent(new Event('change')) }
+      return
+    }
+    switch (id) {
+      case 'open-folder': openBtn.click(); break
+      case 'open-default': openSelectionDefault(); break
+      case 'reveal': if (focus) void api.fs.revealInFinder(focus); break
+      case 'export': if (focusEntry?.kind === 'image') emit('export:open', { path: focusEntry.path }); break
+      case 'optimize': void optimizeSelection(); break
+      case 'rename': emit('rename:start', undefined); break
+      case 'trash': void trashSelection(); break
+      case 'copy-paths': void copySelection(true); break
+      case 'filter': filterInput.focus(); filterInput.select(); break
+      case 'zoom-in':
+      case 'zoom-out': {
+        const step = id === 'zoom-in' ? 40 : -40
+        sizeSlider.value = String(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Number(sizeSlider.value) + step)))
+        sizeSlider.dispatchEvent(new Event('input'))
+        break
+      }
+      case 'info':
+        if (lightboxIndex !== null) emit('info:toggle', undefined)
+        else if (focusEntry) {
+          emit('info:show', undefined)
+          emit('lightbox:open', { index: entries.indexOf(focusEntry) })
+        }
+        break
+    }
   })
 
   // Live folder: files added, removed or changed show up without reopening the folder.

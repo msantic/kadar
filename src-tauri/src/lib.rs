@@ -6,6 +6,7 @@ mod favorites;
 mod formats;
 mod fs_scan;
 mod macos;
+mod menu;
 mod optimize;
 mod protocol;
 mod recorder;
@@ -32,6 +33,8 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         // Serves local files to the page as viewer-file://viewer/<absolute path>.
         .register_asynchronous_uri_scheme_protocol("viewer-file", protocol::handle)
+        .menu(|app| menu::build(app))
+        .on_menu_event(|app, event| menu::forward(app, event.id().as_ref()))
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             app.manage(thumbs::ThumbService::start(
@@ -55,6 +58,7 @@ pub fn run() {
             commands::rename_file,
             commands::taken_dates,
             commands::export_image,
+            commands::image_properties,
             commands::export_save,
             commands::export_copy,
             commands::take_opened,
