@@ -33,6 +33,7 @@ Later runs start in seconds.
 |---|---|
 | `npm run dev` | Runs Kadar with live reload. Window code reloads at once; Rust changes rebuild and restart the app. |
 | `npm run check` | Runs every automatic check (see [Checks](#checks)). |
+| `npm run share` | Builds, then makes the notarized installer to share (see [Share Kadar](#share-kadar)). |
 | `npm run build` | Builds ffmpeg if needed, runs every check, then builds the signed `Kadar.app` and `.dmg` in `src-tauri/target/release/bundle/`. Stops on the first failed check. |
 | `node scripts/check-docs.mjs` | Runs only the documentation check. |
 | `scripts/build-ffmpeg.sh --force` | Builds ffmpeg again, even when the current copy is up to date. |
@@ -105,7 +106,7 @@ ditto src-tauri/target/release/bundle/macos/Kadar.app /Applications/Kadar.app
 
 ## Share Kadar
 
-`scripts/notarize.sh` (after `npm run build`) sends the app to Apple's notary service, staples the
+`npm run share` builds Kadar, then runs `scripts/notarize.sh`, which sends the app to Apple's notary service, staples the
 approval to it, makes a disk image with an Applications link, and notarizes and staples that too.
 The result opens on any Mac with Apple Silicon and macOS 15 or later, without a warning:
 `src-tauri/target/release/bundle/share/Kadar-<version>.dmg`.
