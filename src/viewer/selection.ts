@@ -106,8 +106,13 @@ export async function trashSelection(): Promise<void> {
   const paths = selectedPaths()
   if (paths.length === 0) return
   try {
-    const n = await window.viewer.fs.trash(paths)
-    emit('toast', { text: `Moved ${plural(n, 'file', 'files')} to the Trash` })
+    const pairs = await window.viewer.fs.trash(paths)
+    const { pushUndo, undoLast } = await import('./undo')
+    pushUndo({ kind: 'trash', pairs })
+    emit('toast', {
+      text: `Moved ${plural(pairs.length, 'file', 'files')} to the Trash`,
+      action: { label: 'Undo', run: () => void undoLast() },
+    })
     // Show it at once; the Mac's notice of the change can take a moment.
     emit('folder:refresh', undefined)
   } catch (err) {

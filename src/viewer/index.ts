@@ -6,6 +6,7 @@ import {
   trashSelection,
 } from './selection'
 import { createExport } from './export/export'
+import { undoLast } from './undo'
 import { defaultDescending, SORT_LABELS, sortEntries, type SortBy } from './sort'
 import type { FileEntry } from './types'
 import { filterEntries } from './filter'
@@ -245,11 +246,17 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     }
   })
 
-  // ⌘↑ parent folder, ⌘[ back, ⌘] forward, while the grid is in front.
+  // ⌘↑ parent folder, ⌘[ back, ⌘] forward, ⌘Z undo, while the grid is in front. Here, not in the
+  // grid: these must work in an empty folder too (for example after moving its last file away).
   window.addEventListener('keydown', (e) => {
     if (!e.metaKey || e.defaultPrevented || main.offsetParent === null || getState().lightboxIndex !== null) return
     const t = e.target as HTMLElement | null
     if (t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) return
+    if (e.key.toLowerCase() === 'z' && !e.shiftKey) {
+      e.preventDefault()
+      void undoLast()
+      return
+    }
     const to = e.key === 'ArrowUp' ? 'up' : e.key === '[' ? 'back' : e.key === ']' ? 'forward' : null
     if (!to) return
     e.preventDefault()

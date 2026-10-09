@@ -220,6 +220,20 @@ pub fn export(path: &str, opts: &ExportOptions, dir: &Path) -> Result<ExportResu
     write(&out, &bytes, width, height)
 }
 
+/// The same rotation, crop and size as `export`, without compression (fast PNG): the
+/// "Original" side of the Compare view. Written into its own folder, so the result stays.
+pub fn export_reference(path: &str, opts: &ExportOptions, dir: &Path) -> Result<ExportResult, String> {
+    let pixels = {
+        let guard = decoded(path)?;
+        let d = guard.as_ref().ok_or("cannot read image")?;
+        render(d.frame.image(), opts)?
+    };
+    let (width, height) = (pixels.width, pixels.height);
+    let bytes = optimize::encode_png(pixels, 0)?;
+    let run = fresh_run_dir(dir)?;
+    write(&run.join("original.png"), &bytes, width, height)
+}
+
 /// The latest batch run; an older run stops at its next file.
 static BATCH_RUN: AtomicU64 = AtomicU64::new(0);
 

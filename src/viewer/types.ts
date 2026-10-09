@@ -82,8 +82,10 @@ export interface ViewerAPI {
     getRoots: () => Promise<DefaultRoots>
     chooseFolder: () => Promise<string | null>
     revealInFinder: (p: string) => Promise<void>
-    /** Moves files to the Trash. Returns how many moved. */
-    trash: (paths: string[]) => Promise<number>
+    /** Moves files to the Trash. Returns [where it was, where it is in the Trash] per file. */
+    trash: (paths: string[]) => Promise<[string, string][]>
+    /** Undo of trash: moves files back; returns the paths put back. */
+    putBack: (pairs: [string, string][]) => Promise<string[]>
     /** Camera dates for the "Date Taken" sort, in the same order. */
     takenDates: (files: { path: string; mtimeMs: number }[]) => Promise<(number | null)[]>
     /** Renames a file; returns its new path. */
@@ -122,6 +124,8 @@ export interface ViewerAPI {
     exportSave: (source: string, result: string) => Promise<string>
     /** Copies an export result to the clipboard. */
     exportCopy: (result: string) => Promise<void>
+    /** The same edit without compression, for the Compare view. */
+    exportReference: (path: string, options: ExportOptions) => Promise<ExportResult>
     /** Many images with the same settings; a newer `run` stops an older one. */
     exportBatch: (paths: string[], options: ExportOptions, run: number) => Promise<BatchItem[]>
     onExportProgress: (cb: (p: { run: number; done: number; total: number }) => void) => Unsubscribe

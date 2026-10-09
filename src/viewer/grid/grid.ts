@@ -7,6 +7,7 @@ import {
 } from '../selection'
 import { on } from '../bus'
 import { showContextMenu } from '../context-menu'
+import { pushUndo } from '../undo'
 import { updateSession } from '../session'
 import { emit } from '../bus'
 import type { FileEntry } from '../types'
@@ -229,6 +230,7 @@ export function createGrid(): GridHandle {
       if (!save || !name || name === entry.name) return
       try {
         const newPath = await window.viewer.fs.rename(entry.path, name)
+        pushUndo({ kind: 'rename', now: newPath, before: entry.path })
         selectPath(newPath)
         emit('folder:refresh', undefined)
       } catch (err) {

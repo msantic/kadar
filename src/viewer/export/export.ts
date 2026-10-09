@@ -72,7 +72,21 @@ export function createExport(): HTMLElement {
   const sheet = el('div', 'export-sheet')
   sheet.hidden = true
   frame.append(img, cropBox)
-  stage.append(frame, result, sheet)
+  // Compare: the uncompressed edit over the result; a line you drag shows the original on its
+  // left and the result on its right. "Actual pixels" shows both at one image pixel per screen
+  // pixel, where compression marks are visible.
+  const compare = el('div', 'export-compare')
+  compare.hidden = true
+  const cmpWrap = el('div', 'export-compare-wrap')
+  const cmpResult = el('img', 'export-compare-img')
+  const cmpOrig = el('img', 'export-compare-img export-compare-orig')
+  const cmpLine = el('div', 'export-compare-line')
+  const cmpLeft = el('span', 'export-compare-label export-compare-label-left', 'Original')
+  const cmpRight = el('span', 'export-compare-label export-compare-label-right', 'Result')
+  for (const i of [cmpResult, cmpOrig]) i.draggable = false
+  cmpWrap.append(cmpResult, cmpOrig, cmpLine, cmpLeft, cmpRight)
+  compare.append(cmpWrap)
+  stage.append(frame, result, sheet, compare)
 
   // ─── Settings panel ────────────────────────────────────────────────────────
   const panel = el('div', 'export-panel')
@@ -111,10 +125,20 @@ export function createExport(): HTMLElement {
   const qualityRow = labeled('Quality', qualityWrap)
 
   const info = el('div', 'export-info', '…')
-  const showResultLabel = el('label', 'export-check')
-  const showResult = el('input')
-  showResult.type = 'checkbox'
-  showResultLabel.append(showResult, document.createTextNode(' Show result'))
+  // What the stage shows: the crop frame, the result alone, or Compare.
+  type View = 'crop' | 'result' | 'compare'
+  const viewRow = el('div', 'export-segmented')
+  const viewButtons: Record<View, HTMLButtonElement> = {
+    crop: el('button', '', 'Crop'),
+    result: el('button', '', 'Result'),
+    compare: el('button', '', 'Compare'),
+  }
+  viewRow.append(viewButtons.crop, viewButtons.result, viewButtons.compare)
+  const actualLabel = el('label', 'export-check')
+  const actual = el('input')
+  actual.type = 'checkbox'
+  actualLabel.append(actual, document.createTextNode(' Actual pixels (1:1)'))
+  let view: View = 'crop'
 
   const actions = el('div', 'export-buttons')
   const copyBtn = el('button', 'export-btn export-primary', 'Copy')
@@ -128,7 +152,7 @@ export function createExport(): HTMLElement {
   cropRow.append(aspect, resetCrop)
   panel.append(
     title, source, rotateRow, labeled('Crop', cropRow), labeled('Width', width), labeled('Format', format),
-    qualityRow, info, showResultLabel, actions,
+    qualityRow, info, viewRow, actualLabel, actions,
   )
   root.append(stage, panel)
 
@@ -329,10 +353,65 @@ export function createExport(): HTMLElement {
       latest = r
       const saving = sourceSize > 0 ? Math.min(99, Math.floor((1 - r.bytes / sourceSize) * 100)) : 0
       info.textContent = `${r.width} × ${r.height}  ·  ${formatBytes(r.bytes)}${saving > 0 ? `  ·  ${saving}% smaller` : ''}`
-      if (showResult.checked) result.src = fileUrl(r.path)
+      if (view === 'result') result.src = fileUrl(r.path)
+      if (view === 'compare') {
+        const ref = await window.viewer.share.exportReference(path, options())
+        if (mine !== requestNo) return
+        cmpRight.textContent = `${format.selectedOptions[0]?.textContent?.split(' ')[0] ?? ''}${format.value === 'png' ? '' : ` ${quality.value}`}  ·  ${formatBytes(r.bytes)}`
+        cmpResult.onload = () => sizeCompare()
+        cmpResult.src = fileUrl(r.path)
+        cmpOrig.src = fileUrl(ref.path)
+      }
     } catch (err) {
       if (mine === requestNo) info.textContent = `Error: ${String(err)}`
     }
+  }
+
+  function setView(next: View): void {
+    view = next
+    for (const [name, btn] of Object.entries(viewButtons)) btn.classList.toggle('active', name === next)
+    frame.hidden = next !== 'crop'
+    result.hidden = next !== 'result'
+    compare.hidden = next !== 'compare'
+    actualLabel.hidden = next !== 'compare'
+    if (next === 'crop') layout()
+    if (next === 'result' && latest) result.src = fileUrl(latest.path)
+    if (next === 'compare') schedule()
+  }
+  for (const [name, btn] of Object.entries(viewButtons)) btn.addEventListener('click', () => setView(name as View))
+
+  // Compare sizing: fitted, or one image pixel per screen pixel (then the area scrolls).
+  let split = 0.5
+  function sizeCompare(): void {
+    const w = cmpResult.naturalWidth || 1
+    const h = cmpResult.naturalHeight || 1
+    let s: number
+    if (actual.checked) s = 1 / (window.devicePixelRatio || 1)
+    else s = Math.min((compare.clientWidth - 48) / w, (compare.clientHeight - 48) / h, 1)
+    cmpWrap.style.width = `${w * s}px`
+    cmpWrap.style.height = `${h * s}px`
+    compare.classList.toggle('actual', actual.checked)
+    drawSplit()
+  }
+  function drawSplit(): void {
+    const pct = `${(split * 100).toFixed(2)}%`
+    cmpOrig.style.clipPath = `inset(0 calc(100% - ${pct}) 0 0)`
+    cmpLine.style.left = pct
+  }
+  actual.addEventListener('change', () => sizeCompare())
+  new ResizeObserver(() => { if (!compare.hidden) sizeCompare() }).observe(compare)
+  let splitting = false
+  cmpWrap.addEventListener('pointerdown', (e) => {
+    splitting = true
+    cmpWrap.setPointerCapture(e.pointerId)
+    moveSplit(e)
+  })
+  cmpWrap.addEventListener('pointermove', (e) => { if (splitting) moveSplit(e) })
+  cmpWrap.addEventListener('pointerup', () => { splitting = false })
+  function moveSplit(e: PointerEvent): void {
+    const r = cmpWrap.getBoundingClientRect()
+    split = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))
+    drawSplit()
   }
 
   function remember(): void {
@@ -352,11 +431,6 @@ export function createExport(): HTMLElement {
   })
   quality.addEventListener('input', () => { qualityValue.textContent = quality.value })
   quality.addEventListener('change', () => { remember(); schedule() })
-  showResult.addEventListener('change', () => {
-    frame.hidden = showResult.checked
-    result.hidden = !showResult.checked
-    if (showResult.checked && latest) result.src = fileUrl(latest.path)
-  })
 
   async function copy(): Promise<void> {
     if (batch.length > 1) {
@@ -427,6 +501,8 @@ export function createExport(): HTMLElement {
     root.hidden = true
     img.removeAttribute('src')
     result.removeAttribute('src')
+    cmpResult.removeAttribute('src')
+    cmpOrig.removeAttribute('src')
     sheet.replaceChildren()
     latest = null
     batchItems = []
@@ -439,10 +515,12 @@ export function createExport(): HTMLElement {
     title.textContent = many ? `Export ${batch.length} Images for Web` : 'Export for Web'
     rotateRow.hidden = many
     resetCrop.hidden = many
-    showResultLabel.hidden = many
+    viewRow.hidden = many
+    actualLabel.hidden = true
     sheet.hidden = !many
     frame.hidden = many
     result.hidden = true
+    compare.hidden = true
     // A free crop needs a frame to drag; in batch mode it means "keep the whole image".
     aspect.options[0]!.textContent = many ? 'Whole image' : 'Free'
   }
@@ -454,13 +532,11 @@ export function createExport(): HTMLElement {
     sourceSize = size
     turns = 0
     latest = null
-    showResult.checked = false
-    frame.hidden = false
-    result.hidden = true
+    split = 0.5
     qualityRow.hidden = format.value === 'png'
     source.textContent = `${p.split('/').pop()}  ·  ${formatBytes(size)}`
     root.hidden = false
-    img.onload = () => { fullCrop(); layout(); schedule() }
+    img.onload = () => { fullCrop(); setView('crop'); schedule() }
     img.src = fileUrl(p)
   }
 

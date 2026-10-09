@@ -61,23 +61,52 @@ pub fn choose_folder(app: AppHandle) -> Option<String> {
         .map(|p| p.to_string_lossy().into_owned())
 }
 
-/// Moves files to the Trash, as Finder does ("Put Back" works). Returns how many moved.
+/// Moves files to the Trash, as Finder does ("Put Back" works there too). Returns, per moved
+/// file, [where it was, where it is in the Trash], so Undo can put it back.
 #[tauri::command(async)]
-pub fn trash_files(paths: Vec<String>) -> Result<usize, String> {
+pub fn trash_files(paths: Vec<String>) -> Result<Vec<(String, String)>, String> {
     use objc2_foundation::{NSFileManager, NSString, NSURL};
     let fm = NSFileManager::defaultManager();
-    let mut moved = 0;
+    let mut moved = Vec::new();
     let mut last_error = None;
     for path in &paths {
         let url = NSURL::fileURLWithPath(&NSString::from_str(path));
-        match fm.trashItemAtURL_resultingItemURL_error(&url, None) {
-            Ok(()) => moved += 1,
+        let mut in_trash = None;
+        match fm.trashItemAtURL_resultingItemURL_error(&url, Some(&mut in_trash)) {
+            Ok(()) => {
+                let trashed = in_trash.and_then(|u| u.path()).map(|p| p.to_string());
+                if let Some(t) = trashed {
+                    moved.push((path.clone(), t));
+                }
+            }
             Err(e) => last_error = Some(e.localizedDescription().to_string()),
         }
     }
     match last_error {
-        Some(e) if moved == 0 => Err(e),
+        Some(e) if moved.is_empty() => Err(e),
         _ => Ok(moved),
+    }
+}
+
+/// Undo of Move to Trash: moves each file from the Trash back to where it was. A file never
+/// replaces another one with the same name there. Returns the paths put back.
+#[tauri::command(async)]
+pub fn put_back(pairs: Vec<(String, String)>) -> Result<Vec<String>, String> {
+    let mut back = Vec::new();
+    let mut last_error = None;
+    for (original, trashed) in pairs {
+        if Path::new(&original).exists() {
+            last_error = Some(format!("\"{original}\" already exists."));
+            continue;
+        }
+        match std::fs::rename(&trashed, &original) {
+            Ok(()) => back.push(original),
+            Err(e) => last_error = Some(e.to_string()),
+        }
+    }
+    match last_error {
+        Some(e) if back.is_empty() => Err(e),
+        _ => Ok(back),
     }
 }
 
@@ -144,6 +173,13 @@ pub fn export_copy_many(app: AppHandle, results: Vec<String>) -> Result<(), Stri
 #[tauri::command(async)]
 pub fn export_save_many(pairs: Vec<(String, String)>) -> Result<Vec<String>, String> {
     pairs.iter().map(|(source, result)| crate::export::save_next_to(source, result)).collect()
+}
+
+/// The uncompressed counterpart of an export result, for the Compare view.
+#[tauri::command(async)]
+pub fn export_reference(app: AppHandle, path: String, options: crate::export::ExportOptions) -> Result<crate::export::ExportResult, String> {
+    let dir = app.path().app_cache_dir().map_err(|e| e.to_string())?.join("export-reference");
+    crate::export::export_reference(&path, &options, &dir)
 }
 
 /// Saves an export result into the "optimized" folder next to the source. Returns its path.
@@ -390,5 +426,23 @@ mod tests {
         assert!(b.ends_with("/b.jpg") && std::path::Path::new(&b).is_file());
         let upper = rename_file(b, "B.jpg".into()).unwrap();
         assert!(upper.ends_with("/B.jpg"), "a change of case only is allowed");
+    }
+
+    #[test]
+    fn put_back_moves_files_home_and_never_replaces() {
+        let dir = crate::testutil::temp_dir("put-back");
+        let away = dir.join("away");
+        std::fs::create_dir(&away).unwrap();
+        std::fs::write(away.join("a.jpg"), b"a").unwrap();
+        std::fs::write(away.join("b.jpg"), b"b").unwrap();
+        std::fs::write(dir.join("b.jpg"), b"other").unwrap();
+        let pairs = vec![
+            (dir.join("a.jpg").to_string_lossy().into_owned(), away.join("a.jpg").to_string_lossy().into_owned()),
+            (dir.join("b.jpg").to_string_lossy().into_owned(), away.join("b.jpg").to_string_lossy().into_owned()),
+        ];
+        let back = super::put_back(pairs).unwrap();
+        assert_eq!(back.len(), 1);
+        assert!(dir.join("a.jpg").is_file());
+        assert_eq!(std::fs::read(dir.join("b.jpg")).unwrap(), b"other", "the file there stays");
     }
 }
