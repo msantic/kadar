@@ -12,7 +12,7 @@ use tauri::http::{header, Request, Response, StatusCode};
 use tauri::{Manager, Runtime, UriSchemeContext, UriSchemeResponder};
 
 use crate::formats::{kind_of, mime_of, needs_preview, Kind};
-use crate::macos;
+use crate::platform::image;
 
 /// Bump when the copies change, so old ones are not reused.
 const PREVIEW_VERSION: u32 = 1;
@@ -106,9 +106,9 @@ fn preview(src: &Path, dir: &Path) -> Option<PathBuf> {
         }
     }
     std::fs::create_dir_all(dir).ok()?;
-    let (w, h) = macos::image_size(src)?;
-    let frame = macos::image_thumbnail(src, w.max(h)).ok()?;
-    let ext = macos::write_thumbnail(&frame, &base).ok()?;
+    let (w, h) = image::image_size(src)?;
+    let frame = image::image_thumbnail(src, w.max(h)).ok()?;
+    let ext = image::write_thumbnail(&frame, &base).ok()?;
     Some(base.with_extension(ext))
 }
 
@@ -210,7 +210,7 @@ mod tests {
         crate::testutil::write_png(&src, 64, 48);
         let cache = dir.join("pv");
         let first = preview(&src, &cache).expect("a preview");
-        assert_eq!(macos::image_size(&first), Some((64, 48)), "full size");
+        assert_eq!(image::image_size(&first), Some((64, 48)), "full size");
         let made = std::fs::metadata(&first).unwrap().modified().unwrap();
         let second = preview(&src, &cache).unwrap();
         assert_eq!(first, second);

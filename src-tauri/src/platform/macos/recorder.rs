@@ -221,7 +221,7 @@ impl Recorder {
                 // The app's largest window, found by its window number: the picker's app names
                 // come from the window list, and the recorder may name the app differently.
                 let missing = || format!("No open window found for \"{}\".", opts.target);
-                let id = crate::capture::largest_window_id(&opts.target).ok_or_else(missing)?;
+                let id = crate::platform::capture::largest_window_id(&opts.target).ok_or_else(missing)?;
                 let window = content.windows().iter().find(|w| w.windowID() == id).ok_or_else(missing)?;
                 SCContentFilter::initWithDesktopIndependentWindow(SCContentFilter::alloc(), &window)
             }
@@ -247,7 +247,7 @@ impl Recorder {
             }
         }
 
-        let dir = crate::capture::expand_home(&opts.output_dir);
+        let dir = crate::platform::capture::expand_home(&opts.output_dir);
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
         let final_base = dir.join(format!("recording-{stamp}"));

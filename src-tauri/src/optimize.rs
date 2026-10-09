@@ -12,7 +12,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
 use crate::formats::{ext_of, optimizer_takes_image, optimizer_takes_video};
-use crate::{macos, video};
+use crate::platform::image;
+use crate::video;
 
 const OUT_DIR: &str = "optimized";
 
@@ -216,7 +217,7 @@ fn run_one(
 /// Decodes `src` scaled to `max_width`, encodes it at quality 80 (or lossless PNG) and writes
 /// `dest`, making its folder when missing.
 pub fn optimize_image(src: &Path, dest: &Path, opts: &Options) -> Result<(), String> {
-    let img = macos::decode_for_web(src, opts.max_width)?;
+    let img = image::decode_for_web(src, opts.max_width)?;
     let bytes = match opts.image_format {
         ImageFormat::Webp => encode_webp(&img, 80.0),
         ImageFormat::Jpg => encode_jpeg_q(&img, 80.0)?,
@@ -232,7 +233,7 @@ pub fn optimize_image(src: &Path, dest: &Path, opts: &Options) -> Result<(), Str
 }
 
 /// Lossy WebP at `quality` 0–100. Keeps transparency; opaque images are sent without alpha.
-pub fn encode_webp(img: &macos::Rgba, quality: f32) -> Vec<u8> {
+pub fn encode_webp(img: &crate::platform::Rgba, quality: f32) -> Vec<u8> {
     if img.opaque {
         let rgb = to_rgb(img);
         webp::Encoder::from_rgb(&rgb, img.width, img.height).encode(quality).to_vec()
@@ -242,7 +243,7 @@ pub fn encode_webp(img: &macos::Rgba, quality: f32) -> Vec<u8> {
 }
 
 /// JPEG with mozjpeg at `quality` 0–100. Transparent areas become white.
-pub fn encode_jpeg_q(img: &macos::Rgba, quality: f32) -> Result<Vec<u8>, String> {
+pub fn encode_jpeg_q(img: &crate::platform::Rgba, quality: f32) -> Result<Vec<u8>, String> {
     let rgb = to_rgb(img);
     // mozjpeg reports encoder errors by unwinding; catch them so one bad file fails alone.
     std::panic::catch_unwind(|| -> std::io::Result<Vec<u8>> {
@@ -259,14 +260,14 @@ pub fn encode_jpeg_q(img: &macos::Rgba, quality: f32) -> Result<Vec<u8>, String>
 
 /// Lossless: PNG is picked for transparency or crisp UI art, where lossy compression shows.
 /// `level` 0–6: higher is smaller and slower. 2 suits batch work, 1 suits a waiting user.
-pub fn encode_png(img: macos::Rgba, level: u8) -> Result<Vec<u8>, String> {
+pub fn encode_png(img: crate::platform::Rgba, level: u8) -> Result<Vec<u8>, String> {
     let raw = oxipng::RawImage::new(img.width, img.height, oxipng::ColorType::RGBA, oxipng::BitDepth::Eight, img.data)
         .map_err(|e| e.to_string())?;
     raw.create_optimized_png(&oxipng::Options::from_preset(level)).map_err(|e| e.to_string())
 }
 
 /// Drops alpha. Transparent areas become white, the usual page background.
-fn to_rgb(img: &macos::Rgba) -> Vec<u8> {
+fn to_rgb(img: &crate::platform::Rgba) -> Vec<u8> {
     let mut rgb = Vec::with_capacity(img.data.len() / 4 * 3);
     for px in img.data.as_chunks::<4>().0 {
         let a = px[3] as u32;
@@ -296,7 +297,7 @@ mod tests {
         let dest = out_path(&src, "webp");
         optimize_image(&src, &dest, &opts).unwrap();
         assert_eq!(dest, dir.join("optimized/big-photo.webp"));
-        assert_eq!(crate::macos::image_size(&dest), Some((300, 200)));
+        assert_eq!(crate::platform::image::image_size(&dest), Some((300, 200)));
 
         std::fs::write(dir.join(".hidden.png"), b"x").unwrap();
         std::fs::write(dir.join("readme.txt"), b"x").unwrap();
@@ -309,15 +310,15 @@ mod tests {
         let dir = crate::testutil::temp_dir("optimize-encode");
         let src = dir.join("a.png");
         crate::testutil::write_png(&src, 64, 32);
-        let rgba = crate::macos::decode_for_web(&src, 64).unwrap();
+        let rgba = crate::platform::image::decode_for_web(&src, 64).unwrap();
         for (bytes, ext) in [
             (encode_webp(&rgba, 80.0), "webp"),
             (encode_jpeg_q(&rgba, 80.0).unwrap(), "jpg"),
-            (encode_png(crate::macos::decode_for_web(&src, 64).unwrap(), 2).unwrap(), "png"),
+            (encode_png(crate::platform::image::decode_for_web(&src, 64).unwrap(), 2).unwrap(), "png"),
         ] {
             let p = dir.join(format!("out.{ext}"));
             std::fs::write(&p, &bytes).unwrap();
-            assert_eq!(crate::macos::image_size(&p), Some((64, 32)), "{ext} reads back");
+            assert_eq!(crate::platform::image::image_size(&p), Some((64, 32)), "{ext} reads back");
         }
     }
 
@@ -339,7 +340,7 @@ mod tests {
 
     #[test]
     fn transparency_becomes_white_for_jpg() {
-        let clear = crate::macos::Rgba { width: 1, height: 2, data: vec![0, 0, 0, 0, 10, 20, 30, 255], opaque: false };
+        let clear = crate::platform::Rgba { width: 1, height: 2, data: vec![0, 0, 0, 0, 10, 20, 30, 255], opaque: false };
         assert_eq!(to_rgb(&clear), [255, 255, 255, 10, 20, 30]);
     }
 

@@ -15,6 +15,7 @@ import { pushUndo } from '../undo'
 import { updateSession } from '../session'
 import { emit } from '../bus'
 import type { FileEntry } from '../types'
+import { commandKey, otherModifier } from '../../platform'
 
 const OVERSCAN_ROWS = 2
 
@@ -128,13 +129,13 @@ export function createGrid(): GridHandle {
   // all; Cmd+C copies the files, Shift+Cmd+C their paths; Esc keeps only the focused file. The
   // big view handles its own keys while open.
   window.addEventListener('keydown', (e) => {
-    if (e.defaultPrevented || e.ctrlKey || e.altKey) return
+    if (e.defaultPrevented || otherModifier(e) || e.altKey) return
     if (getState().lightboxIndex !== null || root.offsetParent === null || entries.length === 0) return
     const target = e.target as HTMLElement | null
     if (target && (target.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(target.tagName))) return
 
     const current = selectedIndex()
-    if (e.metaKey) {
+    if (commandKey(e)) {
       const key = e.key.toLowerCase()
       // Cmd+O or Cmd+Down opens the files in their default apps; Cmd+Delete moves them to the
       // Trash. Both as in Finder.
@@ -283,9 +284,9 @@ export function createGrid(): GridHandle {
     canvas.appendChild(cell.root)
     // Shift+click and double-click must not start a text selection or move the keyboard focus.
     cell.root.addEventListener('mousedown', (e) => {
-      if (e.shiftKey || e.metaKey || e.detail > 1) e.preventDefault()
+      if (e.shiftKey || commandKey(e) || e.detail > 1) e.preventDefault()
       // A possible drag out starts here; it begins once the mouse moves a few pixels.
-      if (e.button === 0 && !e.shiftKey && !e.metaKey && cell.entry && !editing) {
+      if (e.button === 0 && !e.shiftKey && !commandKey(e) && cell.entry && !editing) {
         pressed = { cell, x: e.clientX, y: e.clientY }
       }
     })
@@ -308,7 +309,7 @@ export function createGrid(): GridHandle {
     if (!cell.entry) return
     // As in Finder: click selects, Cmd+click adds or removes, Shift+click selects a range,
     // double-click opens. Right-click opens the file menu.
-    if (e.metaKey) toggle(cell.index)
+    if (commandKey(e)) toggle(cell.index)
     else if (e.shiftKey) extendTo(cell.index)
     else selectOnly(cell.index)
   }

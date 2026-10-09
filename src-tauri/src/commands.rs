@@ -3,20 +3,17 @@
 //! theirs directly. Each command is thin and hands the work to its module.
 
 use std::path::Path;
-use std::process::Command;
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
-use crate::capture;
-use crate::clipboard;
 use crate::favorites::{Favorite, Favorites};
 use crate::formats::{kind_of, Kind};
 use crate::fs_scan::{self, FolderEntry, FolderListing};
-use crate::macos;
-use crate::recorder::{self, Recorder};
 use crate::optimize;
+use crate::platform::recorder::{self, Recorder};
+use crate::platform::{capture, clipboard, image, system};
 use crate::thumbs::{FileInfo, RequestResult, ThumbService};
 use crate::watch::FolderWatch;
 
@@ -72,27 +69,7 @@ pub fn choose_folder(app: AppHandle) -> Option<String> {
 /// file, [where it was, where it is in the Trash], so Undo can put it back.
 #[tauri::command(async)]
 pub fn trash_files(paths: Vec<String>) -> Result<Vec<(String, String)>, String> {
-    use objc2_foundation::{NSFileManager, NSString, NSURL};
-    let fm = NSFileManager::defaultManager();
-    let mut moved = Vec::new();
-    let mut last_error = None;
-    for path in &paths {
-        let url = NSURL::fileURLWithPath(&NSString::from_str(path));
-        let mut in_trash = None;
-        match fm.trashItemAtURL_resultingItemURL_error(&url, Some(&mut in_trash)) {
-            Ok(()) => {
-                let trashed = in_trash.and_then(|u| u.path()).map(|p| p.to_string());
-                if let Some(t) = trashed {
-                    moved.push((path.clone(), t));
-                }
-            }
-            Err(e) => last_error = Some(e.localizedDescription().to_string()),
-        }
-    }
-    match last_error {
-        Some(e) if moved.is_empty() => Err(e),
-        _ => Ok(moved),
-    }
+    system::trash(&paths)
 }
 
 /// Undo of Move to Trash: moves each file from the Trash back to where it was. A file never
@@ -210,7 +187,7 @@ pub fn export_copy(app: AppHandle, result: String) -> Result<(), String> {
 /// All header details of an image, for the info panel; null for files the Mac cannot read.
 #[tauri::command(async)]
 pub fn image_properties(path: String) -> Option<serde_json::Value> {
-    macos::image_properties(Path::new(&path))
+    image::image_properties(Path::new(&path))
 }
 
 /// Files that Finder asked Kadar to open, not yet shown.
@@ -234,20 +211,17 @@ pub fn take_opened(opened: State<'_, OpenedFiles>) -> Vec<OpenedItem> {
         .collect()
 }
 
-/// Shows the file selected in a Finder window. Does not wait; errors are ignored.
+/// Shows the file selected in the file manager (Finder on the Mac). Does not wait; errors are
+/// ignored.
 #[tauri::command]
 pub fn reveal_in_finder(path: String) {
-    let _ = Command::new("open").arg("-R").arg(path).spawn();
+    system::reveal(&path);
 }
 
 /// Opens the file in its default app. Returns an error message, or "" on success.
 #[tauri::command(async)]
 pub fn open_default(path: String) -> String {
-    match Command::new("open").arg(path).status() {
-        Ok(s) if s.success() => String::new(),
-        Ok(_) => "No app can open this file.".into(),
-        Err(e) => e.to_string(),
-    }
+    system::open_default(&path).err().unwrap_or_default()
 }
 
 /// Starts watching the shown folder for changes; replaces any earlier watch.
@@ -303,12 +277,12 @@ pub fn meta_get(file_path: String) -> Result<FileMetadata, String> {
     let path = Path::new(&file_path);
     match kind_of(&file_path) {
         Kind::Image => {
-            if let Some((w, h)) = macos::image_size(path) {
+            if let Some((w, h)) = image::image_size(path) {
                 out.width = Some(w);
                 out.height = Some(h);
             }
         }
-        Kind::Video => out.duration_ms = macos::video_duration_ms(path),
+        Kind::Video => out.duration_ms = image::video_duration_ms(path),
         Kind::Unsupported => {}
     }
     Ok(out)
@@ -354,7 +328,7 @@ pub fn optimize_files(app: AppHandle, files: Vec<String>, options: optimize::Opt
 /// wait; errors are ignored.
 #[tauri::command]
 pub fn open_in_finder(path: String) {
-    let _ = Command::new("open").arg(path).spawn();
+    system::open(&path);
 }
 
 /// Opens a web page or a System Settings pane. Other schemes are refused.
@@ -364,7 +338,7 @@ pub fn open_external(url: String) -> Result<(), String> {
     if !allowed.iter().any(|p| url.starts_with(p)) {
         return Err("refused".into());
     }
-    Command::new("open").arg(url).spawn().map(|_| ()).map_err(|e| e.to_string())
+    system::open_url(&url)
 }
 
 /// Names of the apps with a window on screen, for the app picker.
@@ -422,7 +396,7 @@ pub fn record_stop(app: AppHandle, rec: State<'_, Recorder>) -> Result<String, S
 /// Drags files out of Kadar (into Finder, browsers, chats), as Finder does.
 #[tauri::command(async)]
 pub fn start_drag(window: tauri::WebviewWindow, paths: Vec<String>, icon: String) -> Result<(), String> {
-    crate::drag::start(&window, paths, icon)
+    crate::platform::drag::start(&window, paths, icon)
 }
 
 /// Cmd+C: copies the files (and the picture of a single image) to the clipboard.

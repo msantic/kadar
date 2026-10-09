@@ -8,6 +8,8 @@
 use tauri::menu::{Menu, MenuItem, MenuItemBuilder, Submenu, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, Runtime};
 
+use crate::platform::system;
+
 fn item<R: Runtime>(app: &AppHandle<R>, id: &str, text: &str, key: Option<&str>) -> tauri::Result<MenuItem<R>> {
     let mut b = MenuItemBuilder::with_id(id, text);
     if let Some(k) = key {
@@ -33,13 +35,13 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let file = SubmenuBuilder::new(app, "File")
         .item(&item(app, "open-folder", "Open Folder…", None)?)
         .item(&item(app, "open-default", "Open in Default App", Some("CmdOrCtrl+O"))?)
-        .item(&item(app, "reveal", "Show in Finder", Some("CmdOrCtrl+R"))?)
+        .item(&item(app, "reveal", &format!("Show in {}", system::FILE_MANAGER), Some("CmdOrCtrl+R"))?)
         .separator()
         .item(&item(app, "export", "Export for Web…", Some("CmdOrCtrl+E"))?)
         .item(&item(app, "optimize", "Optimize", Some("Shift+CmdOrCtrl+O"))?)
         .separator()
         .item(&item(app, "rename", "Rename (Return)", None)?)
-        .item(&item(app, "trash", "Move to Trash", Some("CmdOrCtrl+Backspace"))?)
+        .item(&item(app, "trash", &format!("Move to {}", system::TRASH), Some("CmdOrCtrl+Backspace"))?)
         .separator()
         .close_window()
         .build()?;

@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { el, hide, persist, show } from './shared'
+import { words } from './platform'
 
 interface Progress {
   file: string
@@ -103,7 +104,7 @@ export function initOptimize(isActive: () => boolean): void {
       if (data.outPath) {
         const outPath = data.outPath
         const pathEl = item.el.querySelector('.item-path') as HTMLElement
-        pathEl.textContent = 'Show in Finder →'
+        pathEl.textContent = `${words.showInFileManager} →`
         pathEl.style.cursor = 'pointer'
         pathEl.onclick = () => void invoke('reveal_in_finder', { path: outPath })
       }

@@ -2,7 +2,6 @@
 //! cache file, so a folder of thousands of photos sorts at once the next time.
 
 use std::collections::HashMap;
-use std::os::macos::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
@@ -10,7 +9,7 @@ use std::thread;
 
 use serde::{Deserialize, Serialize};
 
-use crate::macos;
+use crate::platform::image;
 
 /// A file the window asks about, with its modified time in ms. A new time means the cached date
 /// is read again.
@@ -63,10 +62,10 @@ impl TakenDates {
                         let path = Path::new(&files[i].path);
                         // A cloud file kept only online would download in full to read its date.
                         // Skip it (it sorts by creation date) and ask again once it is on the Mac.
-                        if is_online_only(path) {
+                        if crate::platform::system::is_online_only(path) {
                             continue;
                         }
-                        let taken = macos::date_taken_ms(path);
+                        let taken = image::date_taken_ms(path);
                         crate::sync::lock(&found).push((i, taken));
                         }
                     });
@@ -104,12 +103,6 @@ fn prune(known: &mut HashMap<String, Known>, limit: usize) {
     if known.len() > limit {
         known.retain(|path, _| Path::new(path).exists());
     }
-}
-
-/// macOS marks cloud files whose content is not on this Mac yet as "dataless".
-fn is_online_only(path: &Path) -> bool {
-    const SF_DATALESS: u32 = 0x4000_0000;
-    std::fs::metadata(path).is_ok_and(|m| m.st_flags() & SF_DATALESS != 0)
 }
 
 #[cfg(test)]

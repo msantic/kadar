@@ -42,10 +42,10 @@ Tauri 2: a Rust program (`src-tauri/`) and the window content as plain TypeScrip
 |---|---|---|
 | Viewer | `fs_scan.rs`, `thumbs.rs`, `protocol.rs`, `watch.rs`, `favorites.rs` | ImageIO (thumbnails, sizes), AVFoundation (video frames) |
 | Optimize | `optimize.rs`, `video.rs` | ImageIO decode → libwebp / mozjpeg / oxipng; small ffmpeg for video |
-| Record | `recorder.rs` | ScreenCaptureKit records to a file; small ffmpeg mixes audio and makes the MP4 |
-| Screenshot | `capture.rs` | Window list from CoreGraphics; system `screencapture` tool |
+| Record | `platform/macos/recorder.rs` | ScreenCaptureKit records to a file; small ffmpeg mixes audio and makes the MP4 |
+| Screenshot | `platform/macos/capture.rs` | Window list from CoreGraphics; system `screencapture` tool |
 
-Mac-specific code lives in `macos.rs`, `recorder.rs` and `capture.rs`.
+All code that calls the operating system lives in `src-tauri/src/platform/`, one folder per system (`platform/macos/` today). The window asks `src/platform.ts` for the command key and the system's words.
 
 **Small ffmpeg.** `scripts/build-ffmpeg.sh` builds an 8 MB ffmpeg with only H.264 (x264), AAC and the needed readers and filters. The Mac's own H.264/HEVC encoders were tested and gave visibly worse video at the same file size. x264 is GPL, so this ffmpeg is GPL.
 
@@ -67,8 +67,8 @@ Screenshot, Record and Linux come after it. Code written for the first step must
    own image and video tools (WIC, Media Foundation); Linux uses the standard system libraries.
    Do not bundle a large cross-platform image or video library to save code. Size matters more.
 2. **One shared core, one thin layer per system.** Everything that calls the operating system
-   lives behind one Rust module per system (`platform/macos`, `platform/windows`,
-   `platform/linux`) with the same functions. Shared code (thumbnail queue, cache, export
+   lives behind one Rust folder per system (`src-tauri/src/platform/macos/`, later `windows/`
+   and `linux/`) with the same modules and functions; `platform/mod.rs` lists them. Shared code (thumbnail queue, cache, export
    geometry, optimize naming, file serving, sorting) never calls a system API directly. New
    Mac-only code goes into the Mac layer from now on.
 3. **Shared libraries stay shared.** libwebp, mozjpeg, oxipng, notify and the small ffmpeg work
@@ -112,8 +112,8 @@ Screenshot, Record and Linux come after it. Code written for the first step must
 
 ### Order of work
 
-1. **Prepare on the Mac.** Move all Mac calls behind the Mac layer, and add the key and word
-   helper in the window. Nothing changes for the user; every check still passes.
+1. **Prepare on the Mac.** Done 2026-10-09: all Mac calls are behind `src-tauri/src/platform/macos/`,
+   the Mac crates build only for macOS, and the window asks `src/platform.ts` for keys and words.
 2. **Build machines.** Builds and checks run on macOS, Windows and Linux for every change.
 3. **Windows: Viewer, Optimize, Export for Web.** (The first step.)
 4. **Windows installer and signing.**

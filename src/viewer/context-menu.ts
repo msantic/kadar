@@ -8,6 +8,7 @@ import { getState } from './store'
 import {
   copySelection, exportSelection, openSelectionDefault, optimizeSelection, selectedImages, selectedPaths, trashSelection,
 } from './selection'
+import { words } from '../platform'
 
 /** Opens the menu at window point x, y (CSS px). Does nothing when no file is selected. */
 export async function showContextMenu(x: number, y: number): Promise<void> {
@@ -33,12 +34,12 @@ export async function showContextMenu(x: number, y: number): Promise<void> {
       }),
       await MenuItem.new({
         text: many ? `Open ${n} Files in Default App` : 'Open in Default App',
-        accelerator: 'Cmd+O',
+        accelerator: 'CmdOrCtrl+O',
         action: () => openSelectionDefault(),
       }),
       await MenuItem.new({
-        text: 'Show in Finder',
-        accelerator: 'Cmd+R',
+        text: words.showInFileManager,
+        accelerator: 'CmdOrCtrl+R',
         action: () => void window.viewer.fs.revealInFinder(focus),
       }),
       await MenuItem.new({
@@ -49,30 +50,30 @@ export async function showContextMenu(x: number, y: number): Promise<void> {
       await separator(),
       await MenuItem.new({
         text: many ? `Copy ${n} Files` : 'Copy',
-        accelerator: 'Cmd+C',
+        accelerator: 'CmdOrCtrl+C',
         action: () => void copySelection(false),
       }),
       await MenuItem.new({
         text: many ? `Copy ${n} Paths` : 'Copy Path',
-        accelerator: 'Shift+Cmd+C',
+        accelerator: 'Shift+CmdOrCtrl+C',
         action: () => void copySelection(true),
       }),
       await separator(),
       await MenuItem.new({
         text: images > 1 ? `Export ${images} Images for Web…` : 'Export for Web…',
-        accelerator: 'Cmd+E',
+        accelerator: 'CmdOrCtrl+E',
         enabled: images > 0,
         action: () => exportSelection(),
       }),
       await MenuItem.new({
         text: many ? `Optimize ${n} Files` : 'Optimize',
-        accelerator: 'Shift+Cmd+O',
+        accelerator: 'Shift+CmdOrCtrl+O',
         action: () => void optimizeSelection(),
       }),
       await separator(),
       await MenuItem.new({
-        text: 'Move to Trash',
-        accelerator: 'Cmd+Backspace',
+        text: `Move to ${words.trash}`,
+        accelerator: 'CmdOrCtrl+Backspace',
         action: () => void trashSelection(),
       }),
     ],

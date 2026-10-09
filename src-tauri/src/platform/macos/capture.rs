@@ -14,7 +14,8 @@ use objc2_core_graphics::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{macos, optimize};
+use crate::optimize;
+use super::image;
 
 struct WindowInfo {
     id: u32,
@@ -201,19 +202,19 @@ pub fn take(opts: &ShotOptions) -> Result<String, String> {
 
 /// Trim, scale and encode the raw capture. Trim is in screen points, so it scales with Retina.
 fn finish(raw: &Path, dest: &Path, window: &WindowInfo, opts: &ShotOptions) -> Result<(), String> {
-    let (w, h) = macos::image_size(raw).ok_or("cannot read the screenshot")?;
-    let mut frame = macos::image_thumbnail(raw, w.max(h))?;
+    let (w, h) = image::image_size(raw).ok_or("cannot read the screenshot")?;
+    let mut frame = image::image_thumbnail(raw, w.max(h))?;
     let ratio = (w as f64 / window.width).round().max(1.0);
     let trim = opts.trim_px as f64 * ratio;
     let (mut cw, mut ch) = (w as f64, h as f64);
     if trim > 0.0 && cw > trim * 2.0 && ch > trim * 2.0 {
         cw -= trim * 2.0;
         ch -= trim * 2.0;
-        frame = macos::crop(&frame, trim, trim, cw, ch).ok_or("cannot trim the screenshot")?;
+        frame = image::crop(&frame, trim, trim, cw, ch).ok_or("cannot trim the screenshot")?;
     }
     let scale = opts.scale.clamp(1, 100) as f64 / 100.0;
     let (ow, oh) = (((cw * scale).round() as usize).max(1), ((ch * scale).round() as usize).max(1));
-    let pixels = macos::render_rgba(frame.image(), ow, oh)?;
+    let pixels = image::render_rgba(frame.image(), ow, oh)?;
 
     let bytes = if opts.format == "webp" {
         optimize::encode_webp(&pixels, 90.0)

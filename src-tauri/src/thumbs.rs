@@ -13,7 +13,7 @@ use serde_json::json;
 use tauri::{AppHandle, Emitter};
 
 use crate::formats::{kind_of, Kind};
-use crate::macos;
+use crate::platform::image;
 
 /// Bump when thumbnail output changes, so old cache files are not reused.
 const THUMB_VERSION: u32 = 2;
@@ -143,14 +143,8 @@ impl ThumbService {
 /// One worker per performance core. Measured on 10 performance cores: 10 workers make about
 /// 320 thumbnails a second, 6 workers about 170; more than the core count gains nothing.
 fn worker_count() -> usize {
-    let mut cores: libc::c_int = 0;
-    let mut size = std::mem::size_of::<libc::c_int>();
-    let name = c"hw.perflevel0.physicalcpu";
-    let ok = unsafe {
-        libc::sysctlbyname(name.as_ptr(), (&raw mut cores).cast(), &mut size, std::ptr::null_mut(), 0)
-    } == 0;
-    let fallback = thread::available_parallelism().map(|n| n.get()).unwrap_or(4).saturating_sub(2);
-    (if ok && cores > 0 { cores as usize } else { fallback }).clamp(2, 12)
+    let fallback = || thread::available_parallelism().map(|n| n.get()).unwrap_or(4).saturating_sub(2);
+    crate::platform::system::performance_cores().unwrap_or_else(fallback).clamp(2, 12)
 }
 
 fn lookup(base: &Path) -> Option<PathBuf> {
@@ -204,10 +198,10 @@ fn worker_loop(shared: &Shared) {
 fn generate(job: &Job) -> Result<String, String> {
     let src = Path::new(&job.src);
     let frame = match job.kind {
-        Kind::Video => macos::video_frame(src, job.max_px)?,
-        _ => macos::image_thumbnail(src, job.max_px)?,
+        Kind::Video => image::video_frame(src, job.max_px)?,
+        _ => image::image_thumbnail(src, job.max_px)?,
     };
-    let ext = macos::write_thumbnail(&frame, &job.target)?;
+    let ext = image::write_thumbnail(&frame, &job.target)?;
     Ok(job.target.with_extension(ext).to_string_lossy().into_owned())
 }
 
@@ -267,7 +261,7 @@ mod tests {
         };
         std::fs::create_dir_all(dir.join("ab")).unwrap();
         let made = PathBuf::from(generate(&job).expect("a thumbnail"));
-        assert_eq!(macos::image_size(&made), Some((100, 50)), "the long side fits, the shape stays");
+        assert_eq!(image::image_size(&made), Some((100, 50)), "the long side fits, the shape stays");
         assert_eq!(lookup(&job.target), Some(made));
         assert_eq!(lookup(&dir.join("ab").join("missing")), None);
 

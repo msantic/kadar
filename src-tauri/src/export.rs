@@ -10,14 +10,10 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use objc2_core_foundation::{CGPoint, CGRect, CGSize};
-use objc2_core_graphics::{
-    kCGColorSpaceSRGB, CGBitmapContextCreate, CGColorSpace, CGContext, CGImage, CGImageAlphaInfo,
-    CGInterpolationQuality,
-};
 use serde::{Deserialize, Serialize};
 
-use crate::macos::{self, Frame, Rgba};
+use crate::platform::image::{self, Frame};
+use crate::platform::Rgba;
 use crate::optimize;
 
 /// The crop box the user drew. Out-of-range values are clamped, so the box always holds a pixel.
@@ -64,8 +60,6 @@ struct Decoded {
     mtime: SystemTime,
     frame: Frame,
 }
-// SAFETY: CGImage is immutable and thread-safe.
-unsafe impl Send for Decoded {}
 
 static LAST: Mutex<Option<Decoded>> = Mutex::new(None);
 
@@ -74,8 +68,8 @@ fn decoded(path: &str) -> Result<std::sync::MutexGuard<'static, Option<Decoded>>
     let mut last = crate::sync::lock(&LAST);
     let fresh = last.as_ref().is_some_and(|d| d.path == path && d.mtime == mtime);
     if !fresh {
-        let (w, h) = macos::image_size(Path::new(path)).ok_or("cannot read image")?;
-        let frame = macos::image_thumbnail(Path::new(path), w.max(h))?;
+        let (w, h) = image::image_size(Path::new(path)).ok_or("cannot read image")?;
+        let frame = image::image_thumbnail(Path::new(path), w.max(h))?;
         *last = Some(Decoded { path: path.to_string(), mtime, frame });
     }
     Ok(last)
@@ -91,9 +85,11 @@ fn unrotate(x: f64, y: f64, w: f64, h: f64, turns: u8, iw: f64, ih: f64) -> (f64
     }
 }
 
-/// Rotates, crops and scales into straight-alpha sRGB pixels.
-fn render(image: &CGImage, opts: &ExportOptions) -> Result<Rgba, String> {
-    let (iw, ih) = (CGImage::width(Some(image)) as f64, CGImage::height(Some(image)) as f64);
+/// Rotates, crops and scales into straight-alpha sRGB pixels. The geometry is worked out here;
+/// the system draws it (`platform::image::draw_turned`).
+fn render(frame: &Frame, opts: &ExportOptions) -> Result<Rgba, String> {
+    let (iw, ih) = image::frame_size(frame);
+    let (iw, ih) = (iw as f64, ih as f64);
     let odd = opts.turns % 2 == 1;
     let (rw, rh) = if odd { (ih, iw) } else { (iw, ih) };
     let c = opts.crop.unwrap_or_else(|| centered(rw, rh, opts.aspect));
@@ -104,35 +100,11 @@ fn render(image: &CGImage, opts: &ExportOptions) -> Result<Rgba, String> {
     let cw = (c.w.clamp(0.0, 1.0) * rw).round().clamp(1.0, rw - cx);
     let ch = (c.h.clamp(0.0, 1.0) * rh).round().clamp(1.0, rh - cy);
 
-    let (ux, uy, uw, uh) = unrotate(cx, cy, cw, ch, opts.turns, iw, ih);
-    let rect = CGRect { origin: CGPoint { x: ux, y: uy }, size: CGSize { width: uw, height: uh } };
-    let cropped = CGImage::with_image_in_rect(Some(image), rect).ok_or("cannot crop")?;
-
+    let unturned = unrotate(cx, cy, cw, ch, opts.turns, iw, ih);
     let scale = opts.max_width.map_or(1.0, |m| (m as f64 / cw).min(1.0));
     let ow = ((cw * scale).round() as usize).max(1);
     let oh = ((ch * scale).round() as usize).max(1);
-
-    let mut data = vec![0u8; ow * oh * 4];
-    let space = CGColorSpace::with_name(Some(unsafe { kCGColorSpaceSRGB })).ok_or("no sRGB")?;
-    let ctx = unsafe {
-        CGBitmapContextCreate(data.as_mut_ptr().cast(), ow, oh, 8, ow * 4, Some(&space), CGImageAlphaInfo::PremultipliedLast.0)
-    }
-    .ok_or("cannot create bitmap")?;
-    let ctx = Some(&*ctx);
-    CGContext::set_interpolation_quality(ctx, CGInterpolationQuality::High);
-    let (owf, ohf) = (ow as f64, oh as f64);
-    // Drawing space is y-up. Turn the context so the unrotated crop lands rotated clockwise.
-    match opts.turns % 4 {
-        1 => { CGContext::translate_ctm(ctx, 0.0, ohf); CGContext::rotate_ctm(ctx, -std::f64::consts::FRAC_PI_2); }
-        2 => { CGContext::translate_ctm(ctx, owf, ohf); CGContext::rotate_ctm(ctx, std::f64::consts::PI); }
-        3 => { CGContext::translate_ctm(ctx, owf, 0.0); CGContext::rotate_ctm(ctx, std::f64::consts::FRAC_PI_2); }
-        _ => {}
-    }
-    let (dw, dh) = if odd { (ohf, owf) } else { (owf, ohf) };
-    CGContext::draw_image(ctx, CGRect { origin: CGPoint { x: 0.0, y: 0.0 }, size: CGSize { width: dw, height: dh } }, Some(&cropped));
-
-    let opaque = macos::unpremultiply(&mut data);
-    Ok(Rgba { width: ow as u32, height: oh as u32, data, opaque })
+    image::draw_turned(frame, unturned, opts.turns, ow, oh)
 }
 
 /// The largest centered part with the shape `aspect` (width / height), as fractions.
@@ -197,7 +169,7 @@ pub fn export(path: &str, opts: &ExportOptions, dir: &Path) -> Result<ExportResu
     let pixels = {
         let guard = decoded(path)?;
         let d = guard.as_ref().ok_or("cannot read image")?;
-        render(d.frame.image(), opts)?
+        render(&d.frame, opts)?
     };
     let (width, height) = (pixels.width, pixels.height);
     let bytes = encode(pixels, opts)?;
@@ -212,7 +184,7 @@ pub fn export_reference(path: &str, opts: &ExportOptions, dir: &Path) -> Result<
     let pixels = {
         let guard = decoded(path)?;
         let d = guard.as_ref().ok_or("cannot read image")?;
-        render(d.frame.image(), opts)?
+        render(&d.frame, opts)?
     };
     let (width, height) = (pixels.width, pixels.height);
     let bytes = optimize::encode_png(pixels, 0)?;
@@ -261,9 +233,9 @@ pub fn export_batch(
                 let i = next.fetch_add(1, Ordering::Relaxed);
                 let Some(path) = paths.get(i) else { break };
                 let one = (|| {
-                    let (w, h) = macos::image_size(Path::new(path)).ok_or("cannot read image")?;
-                    let frame = macos::image_thumbnail(Path::new(path), w.max(h))?;
-                    let pixels = render(frame.image(), opts)?;
+                    let (w, h) = image::image_size(Path::new(path)).ok_or("cannot read image")?;
+                    let frame = image::image_thumbnail(Path::new(path), w.max(h))?;
+                    let pixels = render(&frame, opts)?;
                     let (pw, ph) = (pixels.width, pixels.height);
                     let bytes = encode(pixels, opts)?;
                     write(&run_dir.join(result_name(path, opts.format, &names)), &bytes, pw, ph)

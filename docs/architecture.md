@@ -63,27 +63,35 @@ may block. Commands without `(async)` run on the main thread; keep them quick (`
 
 ## 2. Rust modules
 
+All code that calls the operating system lives in `src/platform/`, one folder per system
+(`platform/macos/` today; Windows and Linux follow the Roadmap in README.md). `platform/mod.rs`
+lists what every system must offer and holds the shared pixel type `Rgba` and `unpremultiply`.
+The shared modules below call `platform::image`, `platform::system`, `platform::clipboard`,
+`platform::drag`, `platform::capture` and `platform::recorder`, never a system API directly. The
+Mac crates (objc2, libc, ...) are listed for macOS builds only in `Cargo.toml`.
+
 | File | Job | Mac framework / crate | Threads |
 |---|---|---|---|
 | `main.rs` | Calls `kadar_lib::run()` | — | main |
 | `lib.rs` | Builds the app: plugins, `viewer-file` scheme, menu, managed state, command list; handles `RunEvent::Opened`; saves window state on move/resize | tauri, `tauri-plugin-window-state`, `tauri-plugin-dialog` | main; one short thread per move/resize (500 ms debounce) |
-| `commands.rs` | Every command; trash, put back, rename, open, meta live here directly | NSFileManager (trash), `open` | Tauri worker or main (see above) |
+| `commands.rs` | Every command; put back, rename and meta live here directly; trash and opening go to `platform::system` | — | Tauri worker or main (see above) |
 | `formats.rs` | Image / video / unsupported by extension only; MIME types; which files need a preview | — | any |
 | `fs_scan.rs` | Folder listing (skips dot files, stops at 50,000 entries), tree children, Finder-style natural sort | std::fs | command thread |
 | `watch.rs` | Watches the open folder (not recursive), 200 ms quiet time, emits `viewer:fs:changed` | `notify` (FSEvents) | notify thread + one debounce thread |
-| `thumbs.rs` | Thumbnail queue, workers, disk cache, eviction | ImageIO, AVFoundation via `macos.rs`; `sha1_smol` | one worker per performance core + hourly sweep thread |
-| `taken.rs` | "Date Taken" from EXIF, cached in a JSON file | ImageIO via `macos.rs` | scoped threads, one per core |
+| `thumbs.rs` | Thumbnail queue, workers, disk cache, eviction | `platform::image`; `sha1_smol` | one worker per performance core + hourly sweep thread |
+| `taken.rs` | "Date Taken" from EXIF, cached in a JSON file | `platform::image` | scoped threads, one per core |
 | `favorites.rs` | Favorite folders, loaded lazily, saved atomically | serde_json, uuid | caller |
-| `protocol.rs` | `viewer-file://` handler, ranges, RAW/PSD previews | ImageIO | `spawn_blocking` per request |
-| `macos.rs` | ImageIO thumbnails, sizes, EXIF date, all properties as JSON, AVFoundation frame and duration, RGBA render, PNG bytes | ImageIO, CoreGraphics, AVFoundation | any (AVFoundation in `autoreleasepool`) |
-| `export.rs` | Export for Web: single, reference (Compare), batch, save next to source | CoreGraphics; encoders from `optimize.rs` | command thread; batch on scoped threads, one per core |
+| `protocol.rs` | `viewer-file://` handler, ranges, RAW/PSD previews, media files only | `platform::image` | `spawn_blocking` per request |
+| `platform/macos/image.rs` | ImageIO thumbnails, sizes, EXIF date, all properties as JSON, AVFoundation frame and duration, RGBA render, crop, `draw_turned` (export drawing), PNG bytes | ImageIO, CoreGraphics, AVFoundation | any (AVFoundation in `autoreleasepool`) |
+| `export.rs` | Export for Web: single, reference (Compare), batch, save next to source; the crop and turn geometry | `platform::image::draw_turned`; encoders from `optimize.rs` | command thread; batch on scoped threads, one per core |
 | `optimize.rs` | Optimize tab: expand drops, encode images (WebP / mozjpeg / oxipng), queue videos | `webp`, `mozjpeg`, `oxipng`, `slug` | one video thread + one image thread per core |
 | `video.rs` | Runs bundled `ffmpeg`, parses progress; counts audio tracks | ffmpeg (child process) | caller + one stderr reader thread |
-| `recorder.rs` | Screen / window recording to an HEVC file, then the final MP4 | ScreenCaptureKit, AVFoundation (mic), ffmpeg | command thread waits on SCK callbacks (15 s timeout) |
-| `capture.rs` | Window list, screenshot via `screencapture -l <id>`, resize via AppleScript, permissions | CoreGraphics window list, `screencapture`, `osascript` | command thread |
-| `clipboard.rs` | Copy files (file URLs + PNG for one image) or paths | AppKit NSPasteboard | runs on main thread and waits |
-| `drag.rs` | Native file drag out of Kadar, Copy only | AppKit NSDraggingSession | main thread (not awaited) |
-| `menu.rs` | Menu bar; forwards clicks as a `menu` event | tauri menu | main |
+| `platform/macos/recorder.rs` | Screen / window recording to an HEVC file, then the final MP4 | ScreenCaptureKit, AVFoundation (mic), ffmpeg | command thread waits on SCK callbacks (15 s timeout) |
+| `platform/macos/capture.rs` | Window list, screenshot via `screencapture -l <id>`, resize via AppleScript, permissions | CoreGraphics window list, `screencapture`, `osascript` | command thread |
+| `platform/macos/clipboard.rs` | Copy files (file URLs + PNG for one image), paths or text | AppKit NSPasteboard | runs on main thread and waits |
+| `platform/macos/drag.rs` | Native file drag out of Kadar, Copy only | AppKit NSDraggingSession | main thread (not awaited) |
+| `platform/macos/system.rs` | Trash, reveal in Finder, open default app / URL, "dataless" cloud files, performance cores, menu words | NSFileManager, `open`, `sysctl` | caller |
+| `menu.rs` | Menu bar; forwards clicks as a `menu` event; words from `platform::system` | tauri menu | main |
 | `sync.rs` | Poison-tolerant `lock`, `wait`, `into_inner` | std | — |
 | `testutil.rs` | Temp folders and generated PNGs for checks (`#[cfg(test)]` only) | oxipng | — |
 
@@ -169,7 +177,7 @@ cache above. Video uses `<video>` with range requests.
 
 ### Recorder and Screenshot
 
-**Recorder** (`recorder.rs`, window `recorder.ts`):
+**Recorder** (`platform/macos/recorder.rs`, window `recorder.ts`):
 
 1. `record_start` gets `SCShareableContent`. Whole screen: first display, Kadar's own windows
    excluded. One app: `capture::largest_window_id(name)` finds the app's largest window by window
@@ -190,7 +198,7 @@ cache above. Video uses `<video>` with range requests.
      60 fps → `recording-<ms>-raw.mp4`. Progress: `record-progress` (0–99). The capture file is
      deleted on success.
 
-**Screenshot** (`capture.rs`, window `screenshot.ts`): the window list (layer 0, ≥ 50 × 50, not
+**Screenshot** (`platform/macos/capture.rs`, window `screenshot.ts`): the window list (layer 0, ≥ 50 × 50, not
 Kadar) gives app names. `capture_take` runs `screencapture -l <windowId> -x [-o]` into
 `screenshot-<ms>.png`. Trim (points × Retina ratio), scale and WebP/PNG encoding happen in Rust
 when asked. `capture_resize_window` moves and sizes the app's front window with AppleScript
@@ -198,11 +206,11 @@ when asked. `capture_resize_window` moves and sizes the app's front window with 
 
 ### Clipboard, drag-out, trash, rename, Open With, menu, window state
 
-- **Clipboard** (`clipboard.rs`): runs on the main thread and waits. ⌘C writes one pasteboard
+- **Clipboard** (`platform/macos/clipboard.rs`): runs on the main thread and waits. ⌘C writes one pasteboard
   item per file (file URL); a single image also gets PNG bytes, so it pastes into web pages and
   chats. ⇧⌘C writes the paths as text, one per line. `copy_text` writes plain text (Edit › Copy
   in a text field).
-- **Drag-out** (`drag.rs`): native `NSDraggingSession` with file URLs and a thumbnail icon.
+- **Drag-out** (`platform/macos/drag.rs`): native `NSDraggingSession` with file URLs and a thumbnail icon.
   The grid starts it from `mousemove` after 5 px with the button down, never from the page's
   `dragstart`: the page's own drag shares the Mac drag pasteboard and wipes the files, so every app
   refuses the drop. The source allows **Copy only**; with Move or Generic, Finder moves the
@@ -241,6 +249,7 @@ later caller. One bad image could stop all thumbnails until restart. The data un
 | `main.ts` | Installs the bridges; tab switching; lazy-loads Viewer, Record, Screenshot on first visit (Optimize is set up at once because the viewer's "Optimize" uses it); remembers the tab; routes `menu` events; takes files opened from Finder; shows unhandled promise errors as a toast |
 | `bridge.ts` | `window.viewer` (typed `ViewerAPI` in `viewer/types.ts`) and `window.optimizer` (Screenshot). Each method is one `invoke` or one `listen` |
 | `optimize.ts` | Optimize tab: drop events from the webview, queue list, `file-progress`; `optimizePaths()` for the viewer |
+| `platform.ts` | The system the window runs on: command key (⌘ / Ctrl), key labels for tips, words (Finder / File Explorer / Files, Trash / Recycle Bin); `data-word` elements in `index.html` are filled at start | 
 | `recorder.ts` | Record tab: targets, mics, 3-2-1 countdown with Dock badge, start/stop, `record-*` events |
 | `screenshot.ts`, `shared.ts` | Screenshot tab; shared helpers for Record and Screenshot (presets, resize, save folder, `persist()` of form fields) |
 | `viewer/index.ts` | Builds the viewer: toolbar (path, filter, sort, size slider), grid, big view, export; folder load, history (back / forward / up), sort + filter view, live refresh, toast, menu commands, session restore |

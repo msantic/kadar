@@ -9,6 +9,7 @@ import { copySelection, selectOnly } from '../selection'
 import type { FileEntry } from '../types'
 import { createInfoPanel } from '../info/info'
 import { formatBytes } from '../format'
+import { commandKey, keyLabel } from '../../platform'
 
 /** The big view's element, hidden while closed. It lives as long as the window. */
 export interface LightboxHandle {
@@ -49,7 +50,7 @@ export function createLightbox(): LightboxHandle {
   const exportBtn = document.createElement('button')
   exportBtn.className = 'viewer-lightbox-export'
   exportBtn.textContent = 'Export for Web…'
-  exportBtn.title = 'Rotate, crop and size this image for the web (⌘E)'
+  exportBtn.title = `Rotate, crop and size this image for the web (${keyLabel('E')})`
   exportBtn.addEventListener('click', () => { if (current) emit('export:open', { paths: [current.path] }) })
 
   // Info panel on the right; the stage narrows so the image stays fully visible.
@@ -325,10 +326,10 @@ export function createLightbox(): LightboxHandle {
     if (root.hidden || e.defaultPrevented) return
     const zoomable = !img.hidden
     // Cmd+C copies the shown file, Shift+Cmd+C its path, as in the grid.
-    if (e.metaKey && e.key.toLowerCase() === 'c') { void copySelection(e.shiftKey); e.preventDefault(); return }
-    if (e.metaKey && e.key.toLowerCase() === 'e' && current?.kind === 'image') { emit('export:open', { paths: [current.path] }); e.preventDefault(); return }
+    if (commandKey(e) && e.key.toLowerCase() === 'c') { void copySelection(e.shiftKey); e.preventDefault(); return }
+    if (commandKey(e) && e.key.toLowerCase() === 'e' && current?.kind === 'image') { emit('export:open', { paths: [current.path] }); e.preventDefault(); return }
     if (e.key.toLowerCase() === 'i' && !e.altKey && !e.ctrlKey) { info.toggle(); e.preventDefault(); return }
-    if (e.metaKey) return
+    if (commandKey(e)) return
     if (e.key === 'Escape') { hide(); e.preventDefault() }
     else if (e.key === 'ArrowRight') { step(1); e.preventDefault() }
     else if (e.key === 'ArrowLeft')  { step(-1); e.preventDefault() }

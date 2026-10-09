@@ -30,6 +30,7 @@ Read README.md first. Then the guides in `docs/`: [architecture](docs/architectu
 
 - The window code (`src/`) calls Rust commands with `invoke('name', { camelCaseArgs })`. Every command is in `src-tauri/src/commands.rs` and listed in `lib.rs`.
 - `src/bridge.ts` gives the viewer and the Screenshot tab the `window.viewer` / `window.optimizer` objects, backed by Rust commands and events. Keep that shape, or change the screens and the bridge together.
+- **System calls only in `src-tauri/src/platform/<system>/`** (today `macos/`); shared code calls `platform::image`, `platform::system`, etc. `platform/mod.rs` lists what each system must offer. In the window, use `src/platform.ts` (`commandKey`, `keyLabel`, `words`), never `e.metaKey`, "⌘" or "Finder" directly.
 - Errors must be visible: a message in the tab (Optimize, Record, Screenshot) or the viewer's message line. No `alert()`, no console-only errors. Locks use `crate::sync::lock` (survives a panic elsewhere).
 - Local files reach the window as `viewer-file://viewer/<percent-encoded path>`, served by `protocol.rs`.
 - Long work reports progress as events: `viewer:thumb:ready`, `file-progress`, `record-progress`.

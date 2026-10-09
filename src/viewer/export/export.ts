@@ -9,6 +9,7 @@ import { fileUrl } from '../ipc'
 import { getState } from '../store'
 import type { BatchItem, ExportOptions, ExportResult } from '../types'
 import { formatBytes, savingPercent } from '../format'
+import { commandKey, keyLabel, words } from '../../platform'
 
 interface Rect { x: number; y: number; w: number; h: number }
 type Handle = 'move' | 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
@@ -147,9 +148,9 @@ export function createExport(): HTMLElement {
 
   const actions = el('div', 'export-buttons')
   const copyBtn = el('button', 'export-btn export-primary', 'Copy')
-  copyBtn.title = 'Copy the result (⌘C)'
+  copyBtn.title = `Copy the result (${keyLabel('C')})`
   const saveBtn = el('button', 'export-btn', 'Save')
-  saveBtn.title = 'Save into the "optimized" folder next to the image (⌘S)'
+  saveBtn.title = `Save into the "optimized" folder next to the image (${keyLabel('S')})`
   const closeBtn = el('button', 'export-btn', 'Close')
   actions.append(copyBtn, saveBtn, closeBtn)
 
@@ -476,7 +477,7 @@ export function createExport(): HTMLElement {
         const folder = saved[0]!.slice(0, saved[0]!.lastIndexOf('/'))
         emit('toast', {
           text: `Saved ${saved.length} files → "optimized" folder`,
-          action: { label: 'Show in Finder', run: () => void window.viewer.fs.openDefault(folder) },
+          action: { label: words.showInFileManager, run: () => void window.viewer.fs.openDefault(folder) },
         })
       } catch (err) {
         emit('toast', { text: `Save failed: ${String(err)}` })
@@ -488,7 +489,7 @@ export function createExport(): HTMLElement {
       const saved = await window.viewer.share.exportSave(path, latest.path)
       emit('toast', {
         text: `Saved → optimized/${saved.split('/').pop()}`,
-        action: { label: 'Show in Finder', run: () => void window.viewer.fs.revealInFinder(saved) },
+        action: { label: words.showInFileManager, run: () => void window.viewer.fs.revealInFinder(saved) },
       })
     } catch (err) {
       emit('toast', { text: `Save failed: ${String(err)}` })
@@ -504,9 +505,9 @@ export function createExport(): HTMLElement {
     if (root.hidden) return
     const typing = (e.target as HTMLElement | null)?.tagName === 'SELECT'
     if (e.key === 'Escape') { e.preventDefault(); close() }
-    else if (e.metaKey && e.key.toLowerCase() === 'c') { e.preventDefault(); void copy() }
-    else if (e.metaKey && e.key.toLowerCase() === 's') { e.preventDefault(); void save() }
-    else if (!typing && !e.metaKey && batch.length <= 1 && e.key.toLowerCase() === 'r') { e.preventDefault(); rotRight.click() }
+    else if (commandKey(e) && e.key.toLowerCase() === 'c') { e.preventDefault(); void copy() }
+    else if (commandKey(e) && e.key.toLowerCase() === 's') { e.preventDefault(); void save() }
+    else if (!typing && !commandKey(e) && batch.length <= 1 && e.key.toLowerCase() === 'r') { e.preventDefault(); rotRight.click() }
     // Every other key also stops here, so the arrows, Space or I do not act on the screens
     // behind. Fields still get their keys: this stops only the page's own key handlers.
     e.stopImmediatePropagation()

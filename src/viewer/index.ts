@@ -20,6 +20,7 @@ import { createGrid } from './grid/grid'
 import { createLightbox } from './lightbox/lightbox'
 import { ZOOM_MIN, ZOOM_MAX, ZOOM_DEFAULT } from './grid/grid-layout'
 import { readStored, writeStored } from '../storage'
+import { commandKey } from '../platform'
 
 let initialized = false
 
@@ -165,7 +166,7 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     }
   })
   window.addEventListener('keydown', (e) => {
-    if (e.metaKey && e.key.toLowerCase() === 'f' && main.offsetParent !== null && getState().lightboxIndex === null) {
+    if (commandKey(e) && e.key.toLowerCase() === 'f' && main.offsetParent !== null && getState().lightboxIndex === null) {
       e.preventDefault()
       filterInput.focus()
       filterInput.select()
@@ -254,7 +255,7 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
   // ⌘Z undo (grid or big view); ⌘↑ parent folder, ⌘[ back, ⌘] forward (grid only). Here, not in the
   // grid: these must work in an empty folder too (for example after moving its last file away).
   window.addEventListener('keydown', (e) => {
-    if (!e.metaKey || e.defaultPrevented || main.offsetParent === null) return
+    if (!commandKey(e) || e.defaultPrevented || main.offsetParent === null) return
     const t = e.target as HTMLElement | null
     if (t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) return
     if (e.key.toLowerCase() === 'z' && !e.shiftKey) {

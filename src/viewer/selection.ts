@@ -5,6 +5,7 @@
 import { emit } from './bus'
 import { getState, setState } from './store'
 import { updateSession } from './session'
+import { words } from '../platform'
 
 function commit(selection: Set<string>, focus: string | null, anchor: string | null): void {
   setState({ selection, selectedPath: focus, anchorPath: anchor })
@@ -111,13 +112,13 @@ export async function trashSelection(): Promise<void> {
     const { pushUndo, undoLast } = await import('./undo')
     pushUndo({ kind: 'trash', pairs })
     emit('toast', {
-      text: `Moved ${plural(pairs.length, 'file', 'files')} to the Trash`,
+      text: `Moved ${plural(pairs.length, 'file', 'files')} to the ${words.trash}`,
       action: { label: 'Undo', run: () => void undoLast() },
     })
     // Show it at once; the Mac's notice of the change can take a moment.
     emit('folder:refresh', undefined)
   } catch (err) {
-    emit('toast', { text: `Move to Trash failed: ${String(err)}` })
+    emit('toast', { text: `Move to ${words.trash} failed: ${String(err)}` })
   }
 }
 
@@ -148,7 +149,7 @@ export async function optimizeSelection(): Promise<void> {
     const folder = `${first.slice(0, first.lastIndexOf('/'))}/optimized`
     emit('toast', {
       text: `Optimized ${plural(n, 'file', 'files')} → "optimized" folder`,
-      action: { label: 'Show in Finder', run: () => void window.viewer.fs.openDefault(folder) },
+      action: { label: words.showInFileManager, run: () => void window.viewer.fs.openDefault(folder) },
     })
   } catch (err) {
     emit('toast', { text: `Optimize failed: ${String(err)}` })

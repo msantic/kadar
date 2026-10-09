@@ -16,6 +16,8 @@ use objc2_core_graphics::{
 };
 use objc2_core_media::CMTime;
 use objc2_foundation::{NSString, NSURL};
+
+use crate::platform::{unpremultiply, Rgba};
 use objc2_image_io::{
     kCGImagePropertyExifDateTimeDigitized, kCGImagePropertyExifDateTimeOriginal,
     kCGImagePropertyExifDictionary, kCGImageDestinationLossyCompressionQuality, kCGImagePropertyOrientation,
@@ -30,6 +32,10 @@ pub enum Frame {
     Cf(CFRetained<CGImage>),
     Objc(objc2::rc::Retained<CGImage>),
 }
+
+// SAFETY: a CGImage never changes after it is made, and CoreGraphics allows its use from any
+// thread. Export for Web keeps the last decoded image between calls on different threads.
+unsafe impl Send for Frame {}
 
 impl Frame {
     /// The image, whichever framework made it.
@@ -151,14 +157,6 @@ pub fn video_duration_ms(path: &Path) -> Option<f64> {
     })
 }
 
-/// Pixels in sRGB, 8 bits per channel, RGBA with straight (not premultiplied) alpha.
-pub struct Rgba {
-    pub width: u32,
-    pub height: u32,
-    pub data: Vec<u8>,
-    pub opaque: bool,
-}
-
 /// Decodes `frame` into sRGB RGBA. Wide-gamut photos (Display P3) are converted to sRGB,
 /// which is what browsers assume for images without a color profile.
 pub fn to_rgba(frame: &Frame) -> Result<Rgba, String> {
@@ -191,23 +189,38 @@ pub fn render_rgba(image: &CGImage, w: usize, h: usize) -> Result<Rgba, String> 
     Ok(Rgba { width: w as u32, height: h as u32, data, opaque })
 }
 
-/// The Mac draws premultiplied alpha (color already multiplied by opacity); encoders expect
-/// straight alpha. Converts RGBA pixels in place. Returns true when every pixel is fully opaque.
-pub fn unpremultiply(data: &mut [u8]) -> bool {
-    let mut opaque = true;
-    for px in data.as_chunks_mut::<4>().0 {
-        let a = px[3] as u32;
-        if a == 255 {
-            continue;
-        }
-        opaque = false;
-        if let Some(half) = (a > 0).then_some(a / 2) {
-            for c in &mut px[..3] {
-                *c = ((*c as u32 * 255 + half) / a).min(255) as u8;
-            }
-        }
+/// Width and height in pixels.
+pub fn frame_size(frame: &Frame) -> (u32, u32) {
+    let image = frame.image();
+    (CGImage::width(Some(image)) as u32, CGImage::height(Some(image)) as u32)
+}
+
+/// Cuts `rect` = (x, y, w, h) in pixels of the unturned `frame`, turns it `turns` quarter turns
+/// clockwise and scales it to `out_w` × `out_h` with high quality, into sRGB pixels.
+pub fn draw_turned(frame: &Frame, rect: (f64, f64, f64, f64), turns: u8, out_w: usize, out_h: usize) -> Result<Rgba, String> {
+    let (x, y, w, h) = rect;
+    let rect = CGRect { origin: CGPoint { x, y }, size: CGSize { width: w, height: h } };
+    let cropped = CGImage::with_image_in_rect(Some(frame.image()), rect).ok_or("cannot crop")?;
+    let mut data = vec![0u8; out_w * out_h * 4];
+    let space = CGColorSpace::with_name(Some(unsafe { kCGColorSpaceSRGB })).ok_or("no sRGB")?;
+    let ctx = unsafe {
+        CGBitmapContextCreate(data.as_mut_ptr().cast(), out_w, out_h, 8, out_w * 4, Some(&space), CGImageAlphaInfo::PremultipliedLast.0)
     }
-    opaque
+    .ok_or("cannot create bitmap")?;
+    let ctx = Some(&*ctx);
+    CGContext::set_interpolation_quality(ctx, CGInterpolationQuality::High);
+    let (owf, ohf) = (out_w as f64, out_h as f64);
+    // Drawing space is y-up. Turn the context so the unturned crop lands turned clockwise.
+    match turns % 4 {
+        1 => { CGContext::translate_ctm(ctx, 0.0, ohf); CGContext::rotate_ctm(ctx, -std::f64::consts::FRAC_PI_2); }
+        2 => { CGContext::translate_ctm(ctx, owf, ohf); CGContext::rotate_ctm(ctx, std::f64::consts::PI); }
+        3 => { CGContext::translate_ctm(ctx, owf, 0.0); CGContext::rotate_ctm(ctx, std::f64::consts::FRAC_PI_2); }
+        _ => {}
+    }
+    let (dw, dh) = if turns % 2 == 1 { (ohf, owf) } else { (owf, ohf) };
+    CGContext::draw_image(ctx, CGRect { origin: CGPoint { x: 0.0, y: 0.0 }, size: CGSize { width: dw, height: dh } }, Some(&cropped));
+    let opaque = unpremultiply(&mut data);
+    Ok(Rgba { width: out_w as u32, height: out_h as u32, data, opaque })
 }
 
 /// Cuts `rect` (in pixels, from the top-left) out of `frame`.
@@ -393,14 +406,4 @@ mod tests {
         assert!(super::video_frame(Path::new("/no/such.mov"), 100).is_err());
     }
 
-    #[test]
-    fn straight_alpha_from_premultiplied() {
-        let mut px = [255, 0, 0, 255, 64, 32, 0, 128, 0, 0, 0, 0];
-        assert!(!super::unpremultiply(&mut px));
-        assert_eq!(&px[..4], [255, 0, 0, 255], "opaque pixels stay");
-        assert_eq!(&px[4..8], [128, 64, 0, 128], "half see-through: color doubled back");
-        assert_eq!(&px[8..], [0, 0, 0, 0], "fully clear stays clear");
-        let mut solid = [1, 2, 3, 255];
-        assert!(super::unpremultiply(&mut solid));
-    }
 }

@@ -3,19 +3,15 @@
 //! every command the window can call. It also takes files that Finder opens with Kadar and
 //! queues them for the window.
 
-mod capture;
-mod clipboard;
 mod commands;
-mod drag;
 mod export;
 mod favorites;
 mod formats;
 mod fs_scan;
-mod macos;
 mod menu;
 mod optimize;
+mod platform;
 mod protocol;
-mod recorder;
 mod sync;
 mod taken;
 #[cfg(test)]
@@ -52,8 +48,8 @@ pub fn run() {
             app.manage(favorites::Favorites::new(data_dir.join("viewer-favorites.json")));
             app.manage(taken::TakenDates::load(data_dir.join("date-taken-cache.json")));
             app.manage(watch::FolderWatch::default());
-            app.manage(recorder::Recorder::default());
-            recorder::set_app(app.handle().clone());
+            app.manage(platform::recorder::Recorder::default());
+            platform::recorder::set_app(app.handle().clone());
             save_window_state_on_change(app.handle());
             Ok(())
         })

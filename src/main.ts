@@ -6,9 +6,12 @@ import { listen } from '@tauri-apps/api/event'
 import { installCaptureBridge, installViewerBridge } from './bridge'
 import type { OpenItem } from './viewer'
 import { initOptimize } from './optimize'
+import { applyWords } from './platform'
 
 installViewerBridge()
 installCaptureBridge()
+// Words such as "Show in Finder" follow the system Kadar runs on.
+applyWords()
 
 // Safety net: an error that no code handles still tells the user, in the viewer's message line.
 window.addEventListener('unhandledrejection', (e) => {

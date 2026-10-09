@@ -19,8 +19,17 @@ serde_json = "1"
 notify = "8.2.0"
 sha1_smol = "1.0.1"
 uuid = { version = "1.27.0", features = ["v4"] }
+# Encoders, the same on every system.
+webp = { version = "0.3.1", default-features = false }
+mozjpeg = "0.10.13"
+slug = "0.1.6"
+oxipng = { version = "10.2.1", default-features = false }
+tauri-plugin-window-state = "2"
 
-# macOS frameworks: ImageIO decodes and scales images, AVFoundation reads video frames.
+# macOS only: ImageIO decodes and scales images, AVFoundation reads video frames, ScreenCaptureKit
+# records, AppKit does the clipboard and drag. Used only by src/platform/macos/. Windows and Linux
+# get their own sections here, with their own system libraries (see the Roadmap in README.md).
+[target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.5"
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSURL", "NSError", "NSArray", "NSObject", "NSFileManager", "NSGeometry", "NSThread"] }
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFString", "CFDictionary", "CFNumber", "CFURL", "CFCGTypes", "CFData", "CFArray"] }
@@ -28,13 +37,8 @@ objc2-core-graphics = { version = "0.3.2", default-features = false, features = 
 objc2-image-io = { version = "0.3.2", default-features = false, features = ["std", "CGImageSource", "CGImageDestination", "CGImageProperties", "objc2-core-graphics"] }
 objc2-av-foundation = { version = "0.3.2", default-features = false, features = ["std", "block2", "AVAsset", "AVAssetImageGenerator", "AVCaptureDevice", "AVMediaFormat", "AVVideoSettings", "objc2-core-foundation", "objc2-core-graphics", "objc2-core-media"] }
 objc2-core-media = { version = "0.3.2", default-features = false, features = ["std", "CMTime"] }
-webp = { version = "0.3.1", default-features = false }
-mozjpeg = "0.10.13"
-slug = "0.1.6"
-oxipng = { version = "10.2.1", default-features = false }
 objc2-screen-capture-kit = { version = "0.3.2", default-features = false, features = ["std", "block2", "libc", "SCShareableContent", "SCStream", "SCRecordingOutput", "objc2-core-foundation", "objc2-core-graphics", "objc2-core-media", "objc2-av-foundation"] }
 block2 = "0.6.2"
-tauri-plugin-window-state = "2"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSPasteboard", "NSPasteboardItem", "NSApplication", "NSDragging", "NSDraggingItem", "NSDraggingSession", "NSEvent", "NSGraphics", "NSGraphicsContext", "NSImage", "NSResponder", "NSView", "NSWindow", "objc2-core-foundation"] }
 libc = "0.2.190"
 

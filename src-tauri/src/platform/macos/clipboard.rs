@@ -11,7 +11,7 @@ use objc2_foundation::{NSArray, NSData, NSString, NSURL};
 use tauri::AppHandle;
 
 use crate::formats::{kind_of, Kind};
-use crate::macos;
+use super::image;
 
 /// The clipboard belongs to the main thread; run there and wait for the result.
 fn on_main<T: Send + 'static>(app: &AppHandle, f: impl FnOnce() -> T + Send + 'static) -> Result<T, String> {
@@ -45,7 +45,7 @@ pub fn copy_text(app: &AppHandle, text: String) -> Result<(), String> {
 pub fn copy_files(app: &AppHandle, paths: Vec<String>) -> Result<(), String> {
     // A picture only for one image: a picture of each of many photos would be very large.
     let png = match paths.as_slice() {
-        [one] if kind_of(one) == Kind::Image => macos::png_bytes(std::path::Path::new(one)),
+        [one] if kind_of(one) == Kind::Image => image::png_bytes(std::path::Path::new(one)),
         _ => None,
     };
     on_main(app, move || {
