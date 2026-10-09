@@ -1,7 +1,8 @@
 # Kadar
 
-Fast image viewer and image/video tool. Today for macOS (Apple Silicon, macOS 15+), about 15 MB
-installed. Windows and Linux are planned: see [Roadmap](#roadmap-windows-and-linux).
+Fast image viewer and image/video tool for **macOS** (Apple Silicon, macOS 15+, about 15 MB
+installed) and **Windows** (10 and 11, x64, about 22 MB installed). On Windows, Screenshot and
+Record are not there yet; Linux is on hold. See [Platforms](#platforms-mac-windows-linux).
 
 - **Viewer** — folder tree, favorites, thumbnail grid, full-size view for images and videos.
 - **Optimize** — drop files or folders; get web-ready copies in an `optimized/` folder next to them.
@@ -54,13 +55,26 @@ All code that calls the operating system lives in `src-tauri/src/platform/`, one
 
 **Signing.** Release builds are signed with the Prelako Developer ID (`src-tauri/tauri.conf.json`). A stable signature keeps the Screen Recording and microphone permissions across rebuilds. `scripts/notarize.sh` makes a notarized installer to share (see docs/development.md).
 
-## Roadmap: Windows and Linux
+## Platforms: Mac, Windows, Linux
 
-**Final goal:** every feature (Viewer, Optimize, Export for Web, Screenshot, Record) on macOS,
-Windows and Linux, and each download stays small.
+**Status (2026-10-09, owner's decision): feature work is finished for now.**
 
-**First step (decided 2026-10-09):** Windows, with the Viewer, Optimize and Export for Web.
-Screenshot, Record and Linux come after it. Code written for the first step must not block them.
+| | Viewer | Optimize (images, videos) | Export for Web | Drag out | Screenshot | Record | Installer |
+|---|---|---|---|---|---|---|---|
+| **macOS** | yes | yes | yes | yes | yes | yes | notarized (`npm run share`) |
+| **Windows** | yes | yes | yes | yes | not yet | not yet | unsigned (`npm run share:windows`) |
+| **Linux** | on hold | | | | | | |
+
+- **Linux is on hold.** macOS and Windows cover the systems that matter for Kadar's users; Linux
+  is not worth the work now. Nothing below is deleted: the plan, the table of Linux tools and the
+  rules stay, so the work can start again without new research.
+- **Screenshot and Record on Windows** wait too. Their tabs are hidden on Windows.
+- **The code stays ready for both:** every system call is behind `src-tauri/src/platform/`, and a
+  Linux folder there is the way in. The rules below still apply to every change.
+
+The original plan follows, unchanged except for its status marks.
+
+**Final goal (2026-10-09):** every feature on macOS, Windows and Linux, each download small.
 
 ### Rules for all new work, starting now
 
@@ -115,14 +129,14 @@ Screenshot, Record and Linux come after it. Code written for the first step must
 
 1. **Prepare on the Mac.** Done 2026-10-09: all Mac calls are behind `src-tauri/src/platform/macos/`,
    the Mac crates build only for macOS, and the window asks `src/platform.ts` for keys and words.
-2. **Build machines.** Builds and checks run on macOS, Windows and Linux for every change.
-3. **Windows: Viewer, Optimize, Export for Web.** (The first step.) Started 2026-10-09: Kadar
-   builds and runs on Windows; the Viewer, image and video optimizing and Export for Web work.
-   Installer: `npm run share:windows` (not signed, by choice). Steps and the remote screen: [docs/windows.md](docs/windows.md).
-4. **Windows installer and signing.**
-5. **Linux: Viewer, Optimize, Export for Web.**
-6. **Screenshot** on Windows, then Linux.
-7. **Record** on Windows, then Linux.
+2. **Build machines.** Done for Windows (the office server's `winbuild`, driven from the Mac).
+   On hold for Linux.
+3. **Windows: Viewer, Optimize, Export for Web.** Done 2026-10-09: also drag-out, video
+   optimizing and one Kadar at a time. Steps and the remote screen: [docs/windows.md](docs/windows.md).
+4. **Windows installer.** Done 2026-10-09: `npm run share:windows`, not signed by choice.
+5. **Linux: Viewer, Optimize, Export for Web.** On hold.
+6. **Screenshot** on Windows, then Linux. On hold.
+7. **Record** on Windows, then Linux. On hold.
 
 ### Build machines (office server)
 
@@ -135,19 +149,18 @@ from the Mac over SSH, as the BIMTLY Showroom does. Its runbook is
   Git, Node 22, Python, Visual Studio 2022 Build Tools with the Windows SDK, and WebView2. Kadar
   needs only Rust added (rustup, MSVC). The machine runs on demand: `make start` / `make stop` in
   its role folder on the server, because it shares the server with production work.
-- **Linux: a new small virtual machine** (Ubuntu 24.04 desktop, no graphics card), made with the
-  same tools as `winbuild`. Not on the server itself: the server runs production, and its package
-  setup already has a known conflict.
+- **Linux (on hold): a new small virtual machine** (Ubuntu 24.04 desktop, no graphics card), made
+  with the same tools as `winbuild`. Not on the server itself: the server runs production, and its
+  package setup already has a known conflict. Not made.
 - **From the Mac:** one script sends the work to the machine (the pushed commit from GitHub, or a
   git bundle for work that is not pushed, as the Showroom runbook describes), runs
   `npm run check` and the build there, and copies the installer back.
-- **The Windows video tool:** the small ffmpeg must be built for Windows once; cross-built on the
-  Linux machine, or built on `winbuild` with MSYS2. Decide when the Windows step starts.
+- **The Windows video tool:** built on `winbuild` with MSYS2 (docs/windows.md).
 
 ### Open questions for the owner
 
-- Windows signing: a yearly certificate, or Microsoft's signing service, or none at first
-  (Windows then shows an "unknown publisher" warning).
-- Photoshop files on Windows and Linux: skip them, or add a small PSD reader.
-- Which Linux systems to test: Ubuntu only, or also Fedora.
+- Windows signing: decided 2026-10-09, none for now (Windows shows "unknown publisher" once).
+- Photoshop files on Windows: Windows has no built-in reader; they show no thumbnail there.
+  Open: skip them for good, or add a small PSD reader.
+- Which Linux systems to test (Ubuntu only, or also Fedora): only when Linux starts again.
 

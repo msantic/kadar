@@ -1,6 +1,6 @@
 // Which system the window runs on, and what follows from it: the command key (⌘ on the Mac,
 // Ctrl on Windows and Linux) and the words the user knows there (Finder, File Explorer, Files).
-// The window code asks here and never names ⌘ or Finder itself (Roadmap in README.md).
+// The window code asks here and never names ⌘ or Finder itself ("Platforms" in README.md).
 
 /** The three systems Kadar is made for. */
 export type System = 'mac' | 'windows' | 'linux'

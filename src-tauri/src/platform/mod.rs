@@ -2,7 +2,7 @@
 //! Shared code (thumbnail queue, cache, export geometry, optimize naming, file serving) calls
 //! `platform::image`, `platform::system`, `platform::clipboard`, `platform::drag`,
 //! `platform::capture` and `platform::recorder`, and never a system API directly. A new system
-//! (Windows, Linux; see the Roadmap in README.md) adds its own folder with the same modules and
+//! (Windows, Linux; see "Platforms" in README.md) adds its own folder with the same modules and
 //! the same public functions and types; the compiler then checks that nothing is missing.
 //!
 //! What each module must offer:

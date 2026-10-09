@@ -1,4 +1,4 @@
-//! Recording on Windows: not ready yet (Roadmap in README.md: Windows Graphics Capture with
+//! Recording on Windows: not ready yet ("Platforms" in README.md: Windows Graphics Capture with
 //! loopback sound, encoded by the bundled ffmpeg). Every call answers clearly, and the window
 //! hides the Record tab (`FEATURES`).
 

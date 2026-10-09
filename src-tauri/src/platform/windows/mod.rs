@@ -2,7 +2,7 @@
 //! for video frames, the Recycle Bin and opening files, and the Windows clipboard. Each module
 //! has the same name and public items as its twin for every other system.
 //!
-//! Not on Windows yet (Roadmap in README.md): Screenshot and Record. Their modules answer with a
+//! Not on Windows yet ("Platforms" in README.md): Screenshot and Record. Their modules answer with a
 //! clear message, and the window hides both tabs (`FEATURES`).
 
 /// Screenshot placeholders until Windows Graphics Capture is added.

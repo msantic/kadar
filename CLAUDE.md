@@ -4,7 +4,7 @@ Read README.md first. Then the guides in `docs/`: [architecture](docs/architectu
 
 ## Decisions (do not re-open without the owner asking)
 
-- **Mac today; Windows and Linux are the final goal, Windows first** (Viewer, Optimize, Export). Read the Roadmap in README.md before any change: system calls go behind one layer per system, each system uses its own image and video tools (no big bundled decoders), the window never names ⌘ or Finder directly. On the Mac: Apple Silicon, macOS 15+ (needed for screen recording to a file and microphone capture).
+- **Mac and Windows; Linux on hold** (owner, 2026-10-09: feature work is finished for now; Windows has no Screenshot or Record yet). Read "Platforms" in README.md before any change: system calls go behind one layer per system, each system uses its own image and video tools (no big bundled decoders), the window never names ⌘ or Finder directly. On the Mac: Apple Silicon, macOS 15+ (needed for screen recording to a file and microphone capture).
 - **Small app size matters most.** Prefer each system's own frameworks (Mac: ImageIO, AVFoundation, ScreenCaptureKit, CoreGraphics; Windows: WIC, Media Foundation) over new libraries. Check the `.app` size after adding a dependency (`npm run build` prints it; about 15 MB now).
 - **Video uses the self-built ffmpeg on purpose.** Apple's H.264 and HEVC encoders were tested: same file size, visibly blockier video. Do not move video encoding to AVFoundation.
 - **Release builds are signed with the Prelako Developer ID.** A stable signature keeps the Screen Recording and microphone permissions. Do not change the identity or the app id `com.msantic.kadar`.
@@ -23,8 +23,8 @@ Read README.md first. Then the guides in `docs/`: [architecture](docs/architectu
 
 - Windows and Linux builds run on the **BIMTLY office server** (`ssh marko@10.10.10.4`, Ubuntu 24.04). It is part of the BIMTLY infrastructure and DevOps setup; its runbook and faults are in `~/dev/bimtly/devops/conf/office/vm/README.md`. Read it before any work on it.
 - **Windows:** the `winbuild` virtual machine (Windows 11) on that server. From the server: `ssh build@192.168.122.12` (PowerShell, not cmd). Start and stop it with `make start` / `make stop` in `/etc/bimtly/conf/office/vm` on the server. It runs on demand only: the server also runs production, and the BIMTLY Showroom uses the same machine. Do not leave it running, and do not stop it while someone else uses it — ask first.
-- **Linux:** planned as a separate small virtual machine on the same server, never builds on the server itself.
-- Everything is driven from the owner's Mac over SSH: `scripts/win.sh` (run PowerShell there), `scripts/win-sync.sh` (send unsaved work), `npm run share:windows` (the Windows installer, unsigned by choice). To show Kadar to the owner: the remote screen through an SSH tunnel. Every step, the password handling and the traps: **docs/windows.md**. Plan: Roadmap in README.md.
+- **Linux:** on hold (owner, 2026-10-09). If it starts again: a separate small virtual machine on the same server, never builds on the server itself.
+- Everything is driven from the owner's Mac over SSH: `scripts/win.sh` (run PowerShell there), `scripts/win-sync.sh` (send unsaved work), `npm run share:windows` (the Windows installer, unsigned by choice). To show Kadar to the owner: the remote screen through an SSH tunnel. Every step, the password handling and the traps: **docs/windows.md**. Status and plan: "Platforms" in README.md.
 
 ## How the parts connect
 

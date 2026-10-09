@@ -1,4 +1,4 @@
-//! Screenshot on Windows: not ready yet (Roadmap in README.md: Windows Graphics Capture). Every
+//! Screenshot on Windows: not ready yet ("Platforms" in README.md: Windows Graphics Capture). Every
 //! call answers clearly, and the window hides the Screenshot tab (`FEATURES`).
 
 use serde::{Deserialize, Serialize};

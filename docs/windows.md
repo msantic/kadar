@@ -1,7 +1,7 @@
 # Kadar on Windows: build, check and see it
 
 How Kadar is built, checked and shown on Windows, all from the Mac. For the plan and what
-works on Windows today, read the Roadmap in [README.md](../README.md#roadmap-windows-and-linux).
+works on Windows today, read "Platforms" in [README.md](../README.md#platforms-mac-windows-linux).
 For how the code is split per system, read [architecture.md](architecture.md).
 
 ## The machine

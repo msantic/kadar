@@ -152,7 +152,7 @@ Raise `version` in `tauri.conf.json` before you share a new build, so people can
 
 Windows and Linux builds run on the BIMTLY office server, not on the Mac. The Windows steps, the
 scripts and the remote screen are in [windows.md](windows.md). Who owns what, how to
-reach the machines, and the rules for using them are in the Roadmap's "Build machines" part in
+reach the machines, and the rules for using them are in the "Build machines" part of "Platforms" in
 README.md and in `CLAUDE.md`. The server's own runbook is
 `~/dev/bimtly/devops/conf/office/vm/README.md`.
 

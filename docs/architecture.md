@@ -64,7 +64,7 @@ may block. Commands without `(async)` run on the main thread; keep them quick (`
 ## 2. Rust modules
 
 All code that calls the operating system lives in `src/platform/`, one folder per system
-(`platform/macos/`, `platform/windows/` since 2026-10-09; Linux follows the Roadmap in README.md; Windows details in [windows.md](windows.md)). `platform/mod.rs`
+(`platform/macos/`, `platform/windows/` since 2026-10-09; Linux is on hold, see "Platforms" in README.md; Windows details in [windows.md](windows.md)). `platform/mod.rs`
 lists what every system must offer and holds the shared pixel type `Rgba` and `unpremultiply`.
 The shared modules below call `platform::image`, `platform::system`, `platform::clipboard`,
 `platform::drag`, `platform::capture` and `platform::recorder`, never a system API directly. The

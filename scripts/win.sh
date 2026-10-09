@@ -6,7 +6,7 @@
 #   scripts/win.sh < some-script.ps1
 #
 # The route: this Mac → ssh marko@10.10.10.4 (the office server) → ssh build@192.168.122.12 (Windows).
-# The machine runs on demand; see the "Build machines" part of the Roadmap in README.md before
+# The machine runs on demand; see the "Build machines" part of "Platforms" in README.md before
 # starting or stopping it. Override the route with KADAR_WIN_HOST and KADAR_WIN_GUEST.
 
 set -euo pipefail

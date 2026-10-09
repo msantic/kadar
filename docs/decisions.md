@@ -18,11 +18,19 @@ TypeScript, shown by the Mac's own WebKit. The app is now about 15 MB.
 - No Node.js runs in the app. Node is only a build tool.
 - The command-line optimizer from the Electron era was removed.
 
-### Windows and Linux are the final goal; Windows first (2026-10-09)
+### Feature work stops; Linux on hold (2026-10-09)
+
+The owner: macOS and Windows cover the systems that matter; Linux is not worth the work now, and
+the features are complete for now. Kadar ships for macOS (all features) and Windows (no
+Screenshot or Record yet). The Linux plan and the platform layer stay, so Linux can start again
+without new research. New work is fixes, speed and documentation, not features, until the owner
+says otherwise.
+
+### Windows and Linux are the final goal; Windows first (2026-10-09, Linux on hold since)
 
 This replaces "Mac only" below. The final goal is every feature on macOS, Windows and Linux. The
 first step is Windows with the Viewer, Optimize and Export for Web. Each system uses its own
-tools, as the Mac does, so each download stays small. See the Roadmap in README.md for the plan
+tools, as the Mac does, so each download stays small. See "Platforms" in README.md for the plan
 and the rules every new change must follow now.
 
 ### Mac only, Apple Silicon, macOS 15 or later (2026-10-08, replaced 2026-10-09)
