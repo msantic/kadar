@@ -25,14 +25,19 @@ fn on_main<T: Send + 'static>(app: &AppHandle, f: impl FnOnce() -> T + Send + 's
 
 /// Puts the full paths on the clipboard as text, one per line. Waits for the main thread.
 pub fn copy_paths(app: &AppHandle, paths: Vec<String>) -> Result<(), String> {
-    let text = paths.join("\n");
+    copy_text(app, paths.join("\n"))
+}
+
+/// Puts plain text on the clipboard, for example the selected text of a field. Waits for the
+/// main thread.
+pub fn copy_text(app: &AppHandle, text: String) -> Result<(), String> {
     on_main(app, move || {
         let pb = NSPasteboard::generalPasteboard();
         pb.clearContents();
         unsafe { pb.setString_forType(&NSString::from_str(&text), NSPasteboardTypeString) }
     })?
     .then_some(())
-    .ok_or_else(|| "The clipboard did not accept the paths.".into())
+    .ok_or_else(|| "The clipboard did not accept the text.".into())
 }
 
 /// Puts the files on the clipboard as file links; a single image also goes on as a PNG picture.

@@ -10,10 +10,9 @@ import type { FileEntry } from '../types'
 import { createInfoPanel } from '../info/info'
 import { formatBytes } from '../format'
 
-/** The big view's element (hidden while closed) and a function that stops its listeners. */
+/** The big view's element, hidden while closed. It lives as long as the window. */
 export interface LightboxHandle {
   root: HTMLElement
-  dispose: () => void
 }
 
 const MAX_SCALE = 16
@@ -349,24 +348,17 @@ export function createLightbox(): LightboxHandle {
   on('info:toggle', () => info.toggle())
   on('info:show', () => { if (!info.isOpen()) info.toggle() })
 
-  const off1 = on('lightbox:open',  ({ index }) => show(index))
-  const off2 = on('lightbox:close', () => hide())
-  const off3 = on('lightbox:zoom', ({ bigger }) => {
+  on('lightbox:open', ({ index }) => show(index))
+  on('lightbox:close', () => hide())
+  on('lightbox:zoom', ({ bigger }) => {
     if (!img.hidden) zoomAtCenter(bigger ? scale * 1.25 : scale / 1.25)
   })
 
-  const unsub = subscribe((s, prev) => {
+  subscribe((s, prev) => {
     if (s.currentFolder !== prev.currentFolder) hide()
     // The folder changed on disk and the shown image moved: keep the counter right.
     else if (s.lightboxIndex !== prev.lightboxIndex && s.lightboxIndex !== null) drawCaption()
   })
 
-  return {
-    root,
-    dispose: () => {
-      window.removeEventListener('keydown', keyHandler)
-      off1(); off2(); off3()
-      unsub()
-    },
-  }
+  return { root }
 }

@@ -135,14 +135,6 @@ fn render(image: &CGImage, opts: &ExportOptions) -> Result<Rgba, String> {
     Ok(Rgba { width: ow as u32, height: oh as u32, data, opaque })
 }
 
-fn ext(format: optimize::ImageFormat) -> &'static str {
-    match format {
-        optimize::ImageFormat::Webp => "webp",
-        optimize::ImageFormat::Jpg => "jpg",
-        optimize::ImageFormat::Png => "png",
-    }
-}
-
 /// The largest centered part with the shape `aspect` (width / height), as fractions.
 fn centered(rw: f64, rh: f64, aspect: Option<f64>) -> Crop {
     let Some(r) = aspect.filter(|r| *r > 0.0) else { return Crop { x: 0.0, y: 0.0, w: 1.0, h: 1.0 } };
@@ -186,10 +178,10 @@ fn result_name(source: &str, format: optimize::ImageFormat, taken: &Mutex<HashSe
         s => s,
     };
     let mut taken = crate::sync::lock(taken);
-    let mut name = format!("{base}.{}", ext(format));
+    let mut name = format!("{base}.{}", format.ext());
     let mut n = 2;
     while !taken.insert(name.clone()) {
-        name = format!("{base}-{n}.{}", ext(format));
+        name = format!("{base}-{n}.{}", format.ext());
         n += 1;
     }
     name
@@ -228,8 +220,13 @@ pub fn export_reference(path: &str, opts: &ExportOptions, dir: &Path) -> Result<
     write(&run.join("original.png"), &bytes, width, height)
 }
 
-/// The latest batch run; an older run stops at its next file.
+/// The latest batch run; an older run stops at its next file. 0 means "none": a stop request.
 static BATCH_RUN: AtomicU64 = AtomicU64::new(0);
+
+/// Stops the running batch at its next file, for example when Export for Web closes.
+pub fn stop_batch() {
+    BATCH_RUN.store(0, Ordering::SeqCst);
+}
 
 /// The outcome for one source: a result or an error ("stopped" when a newer run took over).
 #[derive(Serialize)]

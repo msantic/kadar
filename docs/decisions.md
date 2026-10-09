@@ -116,13 +116,27 @@ A menu key such as ⌘⌫ pressed in the Optimize, Record or Screenshot tab only
 to the front; it does not act on the files. While Export for Web is open, the Viewer's menu
 commands do nothing. Both stop a key press from changing files the user does not see.
 
+### The window reads only images and videos (2026-10-09)
+
+The window can ask Rust for a file only through Kadar's own file link, and that link serves only
+image and video files. A content security policy lets the window run only Kadar's own code and
+load only its own media. Kadar never loads web pages, so this costs nothing and limits harm from
+a bad file.
+
+### Edit menu items act on files too (2026-10-09)
+
+Undo, Copy and Select All are Kadar's own menu items, so a click with the mouse works on files
+the same as the keys do. In a text field they act on the text. Redo, Cut and Paste stay the Mac's
+standard items, because they only act on text.
+
 ### The Optimize button left the toolbar (2026-10-09)
 
 The owner found it in the way. Optimize is in the right-click menu and on ⇧⌘O.
 
 ### Not the default viewer for now (2026-10-09)
 
-Kadar registers as an alternate viewer for its file types, so it shows in Finder's Open With.
+Kadar registers as an alternate viewer for its file types and for folders, so it shows in
+Finder's Open With and takes folders dropped on its Dock icon.
 The owner chose not to make it the default yet.
 
 ## Optimize and Export

@@ -24,7 +24,9 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: viewer-file: http://viewer-file.localhost; media-src 'self' viewer-file: http://viewer-file.localhost; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'",
+      "devCsp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: viewer-file: http://viewer-file.localhost; media-src 'self' viewer-file: http://viewer-file.localhost; connect-src 'self' ipc: http://ipc.localhost ws://127.0.0.1:1420; object-src 'none'; base-uri 'none'",
+      "dangerousDisableAssetCspModification": ["style-src"]
     }
   },
   "bundle": {
@@ -104,6 +106,15 @@
           "org.webmproject.webm"
         ],
         "name": "Video",
+        "role": "Viewer",
+        "rank": "Alternate"
+      },
+      {
+        "ext": [],
+        "contentTypes": [
+          "public.folder"
+        ],
+        "name": "Folder",
         "role": "Viewer",
         "rank": "Alternate"
       }

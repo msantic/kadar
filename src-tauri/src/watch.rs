@@ -22,7 +22,7 @@ impl FolderWatch {
     /// 200 ms, sends "viewer:fs:changed" { dirPath } once. A folder that cannot be watched is
     /// silently left unwatched.
     pub fn watch(&self, app: AppHandle, dir: String) {
-        self.unwatch();
+        crate::sync::lock(&self.0).take();
         let (tx, rx) = mpsc::channel::<()>();
         let Ok(mut watcher) = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
             if res.is_ok() {
@@ -48,10 +48,5 @@ impl FolderWatch {
             }
         });
         *crate::sync::lock(&self.0) = Some(watcher);
-    }
-
-    /// Stops the watch; its thread ends on its own.
-    pub fn unwatch(&self) {
-        crate::sync::lock(&self.0).take();
     }
 }

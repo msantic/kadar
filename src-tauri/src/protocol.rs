@@ -11,7 +11,7 @@ use std::time::SystemTime;
 use tauri::http::{header, Request, Response, StatusCode};
 use tauri::{Manager, Runtime, UriSchemeContext, UriSchemeResponder};
 
-use crate::formats::{mime_of, needs_preview};
+use crate::formats::{kind_of, mime_of, needs_preview, Kind};
 use crate::macos;
 
 /// Bump when the copies change, so old ones are not reused.
@@ -59,6 +59,10 @@ fn empty(status: StatusCode) -> Response<Vec<u8>> {
 }
 
 fn serve(path: &str, range: Option<&str>) -> Result<Response<Vec<u8>>, StatusCode> {
+    // Only images and videos: the page has no reason to read any other file on the Mac.
+    if kind_of(path) == Kind::Unsupported {
+        return Err(StatusCode::FORBIDDEN);
+    }
     let mut file = File::open(path).map_err(|_| StatusCode::NOT_FOUND)?;
     let len = file.metadata().map_err(|_| StatusCode::NOT_FOUND)?.len();
     let builder = Response::builder()
@@ -193,6 +197,9 @@ mod tests {
         assert_eq!(serve(&path, Some("bytes=50-")).unwrap().body().len(), 10);
 
         assert_eq!(serve(&dir.join("gone.jpg").to_string_lossy(), None).unwrap_err(), StatusCode::NOT_FOUND);
+        let secret = dir.join("notes.txt");
+        std::fs::write(&secret, b"private").unwrap();
+        assert_eq!(serve(&secret.to_string_lossy(), None).unwrap_err(), StatusCode::FORBIDDEN, "only media files");
         assert_eq!(empty(StatusCode::NOT_FOUND).status(), StatusCode::NOT_FOUND);
     }
 

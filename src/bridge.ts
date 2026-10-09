@@ -34,7 +34,6 @@ export function installViewerBridge(): void {
       takenDates:       (files) => invoke('taken_dates', { files }),
       openDefault:      (path) => invoke('open_default', { path }),
       watch:            (path) => invoke('watch_folder', { path }),
-      unwatch:          () => invoke('unwatch_folder'),
       onChanged:        (cb) => subscribe('viewer:fs:changed', cb),
     },
     thumb: {
@@ -43,7 +42,6 @@ export function installViewerBridge(): void {
       cancel:  (requestId) => invoke('thumb_cancel', { requestId }),
       onReady: (cb) => subscribe('viewer:thumb:ready', cb),
       onError: (cb) => subscribe('viewer:thumb:error', cb),
-      onDone:  (cb) => subscribe('viewer:thumb:done', cb),
     },
     meta: {
       get: (filePath) => invoke('meta_get', { filePath }),
@@ -58,6 +56,7 @@ export function installViewerBridge(): void {
       exportCopy:  (result) => invoke('export_copy', { result }),
       exportReference: (path, options) => invoke('export_reference', { path, options }),
       exportBatch: (paths, options, run) => invoke('export_batch', { paths, options, run }),
+      exportStop:  () => invoke('export_stop'),
       onExportProgress: (cb) => subscribe('export-progress', cb),
       exportCopyMany: (results) => invoke('export_copy_many', { results }),
       exportSaveMany: (pairs) => invoke('export_save_many', { pairs }),
@@ -81,7 +80,7 @@ interface CaptureAPI {
   getRunningApps: () => Promise<string[]>
   resizeWindow: (p: { app: string; width: number; height: number; x?: number; y?: number }) => Promise<void>
   chooseDirectory: () => Promise<string | null>
-  getPermissions: () => Promise<{ screen: string; microphone: string }>
+  getPermissions: () => Promise<{ screen: string }>
   openInFinder: (dirPath: string) => Promise<void>
   openExternal: (url: string) => Promise<void>
   takeScreenshot: (p: { appName: string; outputDir: string; format: 'png' | 'webp'; shadow: boolean; trimPx: number; scale: number }) => Promise<string>

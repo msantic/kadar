@@ -18,17 +18,15 @@ export class ThumbLoader {
   private failed = new Set<string>()
   private flushTimer: number | null = null
   private queued: FileEntry[] = []
-  private onReadyDispose: () => void
-  private onErrorDispose: () => void
 
   constructor(private readonly onReady: ReadyCb) {
-    this.onReadyDispose = api.thumb.onReady(({ requestId, srcPath, cachePath }) => {
+    api.thumb.onReady(({ requestId, srcPath, cachePath }) => {
       if (requestId !== this.currentRequestId) return
       this.knownCached.set(srcPath, cachePath)
       this.pendingPaths.delete(srcPath)
       this.onReady(srcPath, cachePath)
     })
-    this.onErrorDispose = api.thumb.onError(({ requestId, srcPath }) => {
+    api.thumb.onError(({ requestId, srcPath }) => {
       if (requestId !== this.currentRequestId) return
       this.pendingPaths.delete(srcPath)
       this.failed.add(srcPath)
@@ -94,11 +92,5 @@ export class ThumbLoader {
       this.pendingPaths.delete(src)
       this.onReady(src, cachePath)
     }
-  }
-
-  dispose(): void {
-    this.onReadyDispose()
-    this.onErrorDispose()
-    this.reset()
   }
 }

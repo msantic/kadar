@@ -53,7 +53,13 @@ may block. Commands without `(async)` run on the main thread; keep them quick (`
   range returns at most 4 MB, so video starts fast. No `Range` header returns the whole file.
 - RAW and PSD files (`formats::needs_preview`) are served as a full-size JPG (PNG if transparent)
   made once with ImageIO and cached in `thumb-cache/pv/`. One global lock makes one copy at a time.
-- Each request runs on `spawn_blocking`. The scheme serves any readable path (CSP is `null`).
+- Each request runs on `spawn_blocking`. Only image and video files are served (`formats::kind_of`);
+  any other path gets 403, so the page cannot read other files on the Mac.
+- The window runs under a content security policy (`tauri.conf.json` › `security.csp`): scripts
+  and styles from the app only, images and media from the app, `data:` and `viewer-file:`,
+  connections only to Tauri's IPC. `devCsp` adds the Vite reload socket. Tauri must not add
+  hashes to `style-src` (`dangerousDisableAssetCspModification`), or the inline SVG styles in
+  `index.html` stop working.
 
 ## 2. Rust modules
 
@@ -103,8 +109,9 @@ grid render ─► ThumbLoader.request() ─(1 rAF batch)─► thumb_request(re
   when output changes.
 - **Eviction:** a sweep thread runs at start and every hour. Over 1 GB, it deletes the least
   recently used files (by mtime) down to 800 MB. RAW previews in `pv/` count too.
-- **Events:** `viewer:thumb:ready {requestId, srcPath, cachePath}`, `viewer:thumb:error`,
-  `viewer:thumb:done {requestId}`. A panic in a decoder is caught (`catch_unwind`) and reported as
+- **Events:** `viewer:thumb:ready {requestId, srcPath, cachePath}` and
+  `viewer:thumb:error {requestId, srcPath, message}`. The window does not ask again for a failed
+  file until the folder reloads; a request that fails as a whole is asked again. A panic in a decoder is caught (`catch_unwind`) and reported as
   an error; the worker lives on.
 - **Cancel:** `thumb_cancel` drops queued jobs of that request; running jobs finish and the window
   ignores them. The window uses one request id per folder and cancels it on folder change.
@@ -120,7 +127,9 @@ grid render ─► ThumbLoader.request() ─(1 rAF batch)─► thumb_request(re
   files are skipped so they do not download. Cache: `date-taken-cache.json`, keyed by path, valid
   while `mtimeMs` matches; rewritten (tmp + rename) after each batch of misses.
 - Favorites: `viewer-favorites.json` (`{ version: 1, favorites: [...] }`). Adding an existing path
-  returns the existing entry.
+  returns the existing entry. A file that cannot be read is renamed to `.json.damaged` before the
+  next save. Double-click a favorite in the sidebar to rename it (`fav_rename`).
+- The Date Taken cache drops entries of deleted files once it holds more than 50,000 entries.
 
 ### Big view file serving
 
@@ -191,7 +200,8 @@ when asked. `capture_resize_window` moves and sizes the app's front window with 
 
 - **Clipboard** (`clipboard.rs`): runs on the main thread and waits. ⌘C writes one pasteboard
   item per file (file URL); a single image also gets PNG bytes, so it pastes into web pages and
-  chats. ⇧⌘C writes the paths as text, one per line.
+  chats. ⇧⌘C writes the paths as text, one per line. `copy_text` writes plain text (Edit › Copy
+  in a text field).
 - **Drag-out** (`drag.rs`): native `NSDraggingSession` with file URLs and a thumbnail icon.
   The grid starts it from `mousemove` after 5 px with the button down, never from the page's
   `dragstart`: the page's own drag shares the Mac drag pasteboard and wipes the files, so every app
@@ -207,7 +217,13 @@ when asked. `capture_resize_window` moves and sizes the app's front window with 
   is missed.
 - **Menu bar** (`menu.rs`): Kadar, File, Edit, View (with Sort By), Go, Window. A click emits
   `menu` with the item id; `main.ts` switches tabs for `tab:*` and forwards the rest to the viewer
-  bus.
+  bus. From another tab, only commands that open or arrange the viewer run; commands on files
+  only bring the Viewer to the front. While Export for Web is open, the viewer ignores menu
+  commands. Edit › Undo, Copy and Select All are Kadar's own items: in a focused text field
+  `main.ts` does the text action; otherwise they act on the viewer's files. Redo, Cut and Paste
+  are the Mac's standard items.
+- **Open folders:** a third file association claims `public.folder` (rank Alternate), so Kadar
+  shows in Finder's Open With for folders and takes folders dropped on its Dock icon.
 - **Window state:** `tauri-plugin-window-state` restores size and place. It saves only on a normal
   quit, so `lib.rs` also saves 500 ms after the last move/resize.
 
@@ -355,8 +371,8 @@ not also handle — or make sure the window calls `preventDefault()`.
   a check at the owner's files. ScreenCaptureKit in `cargo test` needs `NSApplicationLoad()` first.
 - **Window:** `src/**/*.test.ts` with vitest in a jsdom page (`vitest.config.ts`); `testing.ts`
   has `entry()` for fake files. Files: `sort`, `filter`, `selection`, `undo`, `session` (damaged
-  saves), `format` (sizes, "smaller by"), `grid/grid-layout`, `info/info` (the panel with a fake
-  `window.viewer`).
+  saves), `format` (sizes, "smaller by"), `grid/grid-layout`, `grid/thumb-loader` (with a fake
+  `ipc`), `info/info` (the panel with a fake `window.viewer`).
 - **Test media:** `src-tauri/tests/data/clip.mov` is a 1-second 320×240 H.264 + AAC clip (9 KB),
   made once with a full ffmpeg. The video checks run the bundled ffmpeg from `src-tauri/bin/`
   on it, so run `scripts/build-ffmpeg.sh` once before `cargo test` on a fresh clone.

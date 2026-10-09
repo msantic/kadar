@@ -7,7 +7,7 @@ import { emit, on } from './bus'
 import { getSession, updateSession } from './session'
 import {
   copySelection, exportSelection, openSelectionDefault, optimizeSelection, restoreSelection, selectedPaths, selectOnly,
-  trashSelection,
+  selectAll, trashSelection,
 } from './selection'
 import { createExport, isExportOpen } from './export/export'
 import { undoLast } from './undo'
@@ -442,6 +442,9 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
       case 'rename': emit('rename:start', undefined); break
       case 'trash': void trashSelection(); break
       case 'copy-paths': void copySelection(true); break
+      case 'copy': void copySelection(false); break
+      case 'undo': void undoLast(); break
+      case 'select-all': if (lightboxIndex === null) selectAll(); break
       case 'filter':
         if (lightboxIndex === null) { filterInput.focus(); filterInput.select() }
         break

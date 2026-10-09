@@ -26,6 +26,22 @@ const PREVIEW_EXTS: &[&str] = &[
 
 const VIDEO_EXTS: &[&str] = &["mp4", "mov", "m4v", "webm"];
 
+// The optimizer reads a little differently from the viewer: no GIF or SVG (they would lose
+// animation or become pixels), but MKV and AVI, which the bundled ffmpeg reads and WebKit cannot play.
+const OPTIMIZE_IMAGE_EXTS: &[&str] = &["jpg", "jpeg", "png", "heic", "heif", "webp", "tif", "tiff", "bmp", "avif"];
+const OPTIMIZE_VIDEO_EXTS: &[&str] = &["mp4", "mov", "m4v", "webm", "mkv", "avi"];
+
+/// True for images the optimizer and Export for Web take, including camera RAW and Photoshop.
+pub fn optimizer_takes_image(name: &str) -> bool {
+    let ext = ext_of(name);
+    OPTIMIZE_IMAGE_EXTS.contains(&ext.as_str()) || PREVIEW_EXTS.contains(&ext.as_str())
+}
+
+/// True for videos the optimizer takes.
+pub fn optimizer_takes_video(name: &str) -> bool {
+    OPTIMIZE_VIDEO_EXTS.contains(&ext_of(name).as_str())
+}
+
 /// True for files the page cannot show itself, so the big view needs a JPG copy.
 pub fn needs_preview(name: &str) -> bool {
     PREVIEW_EXTS.contains(&ext_of(name).as_str())

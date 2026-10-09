@@ -57,12 +57,13 @@ function render(list: HTMLElement, favs: Favorite[]): void {
   for (const fav of favs) {
     const li = document.createElement('li')
     li.className = 'viewer-favorite-item'
-    li.title = fav.path
+    li.title = `${fav.path}\nDouble-click to rename`
 
     const label = document.createElement('span')
     label.textContent = fav.label
     label.className = 'viewer-favorite-label'
     label.addEventListener('click', () => emit('folder:request', { path: fav.path }))
+    label.addEventListener('dblclick', () => startRename(label, fav))
 
     const remove = document.createElement('button')
     remove.className = 'viewer-ghost-btn'
@@ -76,4 +77,32 @@ function render(list: HTMLElement, favs: Favorite[]): void {
     li.append(label, remove)
     list.appendChild(li)
   }
+}
+
+/** Double-click on a favorite: edit its name in place. Return or leaving the field saves;
+ *  Esc keeps the old name. An empty name keeps the old one too. The folder itself is not renamed. */
+function startRename(label: HTMLElement, fav: Favorite): void {
+  const input = document.createElement('input')
+  input.className = 'viewer-rename'
+  input.value = fav.label
+  input.style.width = '100%'
+  let done = false
+  const finish = async (save: boolean): Promise<void> => {
+    if (done) return
+    done = true
+    const name = input.value.trim()
+    input.replaceWith(label)
+    if (!save || name === '' || name === fav.label) return
+    const renamed = await api.favorites.rename(fav.id, name)
+    if (renamed) setState({ favorites: getState().favorites.map((f) => (f.id === fav.id ? renamed : f)) })
+  }
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation()
+    if (e.key === 'Enter') { e.preventDefault(); void finish(true) }
+    else if (e.key === 'Escape') { e.preventDefault(); void finish(false) }
+  })
+  input.addEventListener('blur', () => void finish(true))
+  label.replaceWith(input)
+  input.focus()
+  input.select()
 }

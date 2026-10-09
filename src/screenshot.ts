@@ -7,7 +7,7 @@ interface ScreenshotBridge {
   resizeWindow: (p: { app: string; width: number; height: number; x?: number; y?: number }) => Promise<void>
   takeScreenshot: (p: { appName: string; outputDir: string; format: 'png' | 'webp'; shadow: boolean; trimPx: number; scale: number }) => Promise<string>
   chooseDirectory: () => Promise<string | null>
-  getPermissions: () => Promise<{ screen: string; microphone: string }>
+  getPermissions: () => Promise<{ screen: string }>
   openInFinder: (dirPath: string) => Promise<void>
   openExternal: (url: string) => Promise<void>
 }
@@ -49,7 +49,8 @@ export async function initScreenshot(): Promise<void> {
   el('ss-capture-btn').addEventListener('click', captureScreenshot)
   el('ss-show-result-btn').addEventListener('click', onShowResult)
 
-  // Update output dimensions on any relevant change
+  // The expected result size, for a window of the size in the fields. The capture has screen
+  // pixels (twice the points on a Retina screen), so the numbers include this screen's factor.
   const updateOutputDim = (): void => {
     const w = parseInt(el<HTMLInputElement>('ss-dim-w').value, 10) || 0
     const h = parseInt(el<HTMLInputElement>('ss-dim-h').value, 10) || 0
@@ -69,12 +70,15 @@ export async function initScreenshot(): Promise<void> {
     // Show scaled output dimensions
     const baseW = trimmedW > 0 ? trimmedW : w
     const baseH = trimmedH > 0 ? trimmedH : h
-    const outW = Math.round(baseW * scale / 100)
-    const outH = Math.round(baseH * scale / 100)
-    if (outW > 0 && outH > 0 && scale < 100) {
-      scaleEl.textContent = `→ ${outW} × ${outH}`
+    const pixels = window.devicePixelRatio || 1
+    const outW = Math.round(baseW * pixels * scale / 100)
+    const outH = Math.round(baseH * pixels * scale / 100)
+    if (outW > 0 && outH > 0) {
+      scaleEl.textContent = `→ about ${outW} × ${outH} px`
+      scaleEl.title = 'For a window of the size above. Resize the window first for an exact size.'
     } else {
       scaleEl.textContent = ''
+      scaleEl.title = ''
     }
   }
   for (const id of ['ss-dim-w', 'ss-dim-h', 'ss-trim-px', 'ss-size-preset', 'ss-scale']) {

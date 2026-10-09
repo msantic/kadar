@@ -11,18 +11,11 @@ use std::thread;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
-use crate::formats::ext_of;
+use crate::formats::{ext_of, optimizer_takes_image, optimizer_takes_video};
 use crate::{macos, video};
 
 const OUT_DIR: &str = "optimized";
 
-const IMAGE_EXTS: &[&str] = &[
-    "jpg", "jpeg", "png", "heic", "heif", "webp", "tif", "tiff", "bmp", "avif",
-    // RAW and Photoshop: the Mac decodes them like any other image.
-    "dng", "cr2", "cr3", "crw", "nef", "nrw", "arw", "srf", "sr2", "raf", "orf", "rw2", "rwl",
-    "pef", "srw", "3fr", "iiq", "erf", "mos", "mrw", "x3f", "psd",
-];
-const VIDEO_EXTS: &[&str] = &["mp4", "mov", "m4v", "avi", "mkv", "webm"];
 
 /// Output format for images; the window sends "webp", "png" or "jpg". Export for Web uses it too.
 #[derive(Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -34,7 +27,8 @@ pub enum ImageFormat {
 }
 
 impl ImageFormat {
-    fn ext(self) -> &'static str {
+    /// The file name extension for results in this format.
+    pub fn ext(self) -> &'static str {
         match self {
             ImageFormat::Webp => "webp",
             ImageFormat::Png => "png",
@@ -68,11 +62,11 @@ pub struct Progress {
 }
 
 fn is_image(p: &Path) -> bool {
-    IMAGE_EXTS.contains(&ext_of(&p.to_string_lossy()).as_str())
+    optimizer_takes_image(&p.to_string_lossy())
 }
 
 fn is_video(p: &Path) -> bool {
-    VIDEO_EXTS.contains(&ext_of(&p.to_string_lossy()).as_str())
+    optimizer_takes_video(&p.to_string_lossy())
 }
 
 /// Dropped paths → the files to optimize. Folders are searched to any depth, but never inside

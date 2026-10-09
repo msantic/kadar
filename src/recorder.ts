@@ -30,13 +30,21 @@ export async function initRecorder(): Promise<void> {
   await loadMicrophones()
   persist('mic-select')
 
-  el('refresh-sources-btn').addEventListener('click', () => void loadTargets())
+  el('refresh-sources-btn').addEventListener('click', () => void loadTargets().then(() => updateResize()))
   el('perm-settings-btn').addEventListener('click', () => void invoke('open_external', { url: SETTINGS_URL }))
   setupPresetChange('size-preset', 'dim-w', 'dim-h', 'dim-inputs', 'dim-ratio')
   el('resize-btn').addEventListener('click', () => {
-    if (el<HTMLSelectElement>('window-select').value === WHOLE_SCREEN) return
     void doResize('window-select', 'dim-w', 'dim-h', 'size-preset', 'resize-btn')
   })
+  // The entire screen has no window to resize: the button is off while it is chosen.
+  const updateResize = (): void => {
+    const whole = el<HTMLSelectElement>('window-select').value === WHOLE_SCREEN
+    const btn = el<HTMLButtonElement>('resize-btn')
+    btn.disabled = whole
+    btn.title = whole ? 'Choose an app window to resize it' : ''
+  }
+  el('window-select').addEventListener('change', updateResize)
+  updateResize()
   setupSaveDir('save-dir', 'choose-dir-btn', 'recorder-save-dir', (dir) => { saveDir = dir })
   el('record-btn').addEventListener('click', () => void start())
   el('stop-btn').addEventListener('click', () => void stop())

@@ -76,6 +76,7 @@ impl TakenDates {
             for (i, taken_ms) in crate::sync::into_inner(found) {
                 known.insert(files[i].path.clone(), Known { mtime_ms: files[i].mtime_ms, taken_ms });
             }
+            prune(&mut known, PRUNE_AT);
             self.save(&known);
         }
         let known = crate::sync::lock(&self.known);
@@ -91,6 +92,17 @@ impl TakenDates {
         if std::fs::write(&tmp, json).is_ok() {
             let _ = std::fs::rename(&tmp, &self.file);
         }
+    }
+}
+
+/// Above this many entries, the cache drops the dates of files that no longer exist.
+const PRUNE_AT: usize = 50_000;
+
+/// When `known` holds more than `limit` entries, removes those whose file is gone, so the cache
+/// file does not grow forever. Below the limit it checks nothing, so saves stay fast.
+fn prune(known: &mut HashMap<String, Known>, limit: usize) {
+    if known.len() > limit {
+        known.retain(|path, _| Path::new(path).exists());
     }
 }
 
@@ -113,5 +125,21 @@ mod tests {
         assert_eq!(dates.get(stamp()), vec![None]);
         assert!(cache.is_file(), "results are kept for the next start");
         assert_eq!(super::TakenDates::load(cache).get(stamp()), vec![None]);
+    }
+
+    #[test]
+    fn the_cache_forgets_deleted_files_once_it_is_large() {
+        let dir = crate::testutil::temp_dir("taken-prune");
+        let here = dir.join("here.jpg");
+        std::fs::write(&here, b"x").unwrap();
+        let entry = super::Known { mtime_ms: 1.0, taken_ms: None };
+        let mut known: std::collections::HashMap<String, super::Known> =
+            [(here.to_string_lossy().into_owned(), entry), (dir.join("gone.jpg").to_string_lossy().into_owned(), entry)]
+                .into_iter()
+                .collect();
+        super::prune(&mut known, 5);
+        assert_eq!(known.len(), 2, "small: nothing is checked");
+        super::prune(&mut known, 1);
+        assert_eq!(known.keys().cloned().collect::<Vec<_>>(), [here.to_string_lossy().into_owned()]);
     }
 }

@@ -25,7 +25,6 @@ export interface GridHandle {
   setZoom: (targetCell: number) => void
   /** Scrolls so the row with this image is at the top, and keeps it there on resize and zoom. */
   scrollToIndex: (index: number) => void
-  dispose: () => void
 }
 
 /** Builds the grid and starts listening to the store, the bus and window keys. Fills itself from the store. */
@@ -394,7 +393,7 @@ export function createGrid(): GridHandle {
     render()
   }
 
-  const unsub = subscribe((s, prev) => {
+  subscribe((s, prev) => {
     if (s.entries !== prev.entries || s.currentFolder !== prev.currentFolder) {
       // Same folder (files changed or new sort): keep the same image at the top.
       const sameFolder = s.currentFolder === prev.currentFolder
@@ -427,11 +426,6 @@ export function createGrid(): GridHandle {
       topIndex = Math.max(0, Math.min(index, entries.length - 1))
       scrollToTop()
       render()
-    },
-    dispose: () => {
-      unsub()
-      ro.disconnect()
-      loader.dispose()
     },
   }
 }

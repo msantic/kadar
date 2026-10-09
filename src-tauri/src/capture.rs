@@ -72,11 +72,11 @@ pub fn running_apps() -> Vec<String> {
     names
 }
 
-/// Permission state for the window: "granted" or "denied" for each.
+/// Screen Recording state for the window: "granted" or "denied". The microphone has its own
+/// check in the recorder, made when a recording with a microphone starts.
 #[derive(Serialize)]
 pub struct Permissions {
     screen: &'static str,
-    microphone: &'static str,
 }
 
 /// Asks macOS once for Screen Recording access; later calls only report the state.
@@ -84,11 +84,10 @@ pub fn screen_access() -> bool {
     CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess()
 }
 
-/// Screen Recording state (asks macOS the first time). Microphone is always "granted" here;
-/// the recorder checks the real microphone access itself.
+/// Screen Recording state (asks macOS the first time).
 pub fn permissions() -> Permissions {
     let screen = if screen_access() { "granted" } else { "denied" };
-    Permissions { screen, microphone: "granted" }
+    Permissions { screen }
 }
 
 /// "~/Pictures" → the full path inside the home folder. Screenshots and recordings use it for

@@ -70,10 +70,34 @@ try { saved = localStorage.getItem('persist:active-tab') } catch { /* private mo
 // selection the user cannot see, so from another tab they only bring the viewer to the front.
 const SAFE_FROM_OTHER_TABS = /^(open-folder|filter|zoom-in|zoom-out|go:.*|sort:.*)$/
 
+// Undo, Copy and Select All are Kadar's own menu items. In a text field they act on its text;
+// elsewhere on the Viewer's files, but never from another tab.
+const EDIT_ITEMS = new Set(['undo', 'copy', 'select-all'])
+
+/** Runs an Edit menu item on the focused text field. False when no text field has the focus. */
+function editText(id: string): boolean {
+  const field = document.activeElement
+  if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return false
+  if (id === 'select-all') field.select()
+  else if (id === 'undo') document.execCommand('undo')
+  else if (id === 'copy') {
+    // Number fields have no text selection: copy their whole value.
+    const start = field.selectionStart
+    const text = start === null ? field.value : field.value.slice(start, field.selectionEnd ?? start)
+    if (text) void invoke('copy_text', { text })
+  }
+  return true
+}
+
 // Menu bar: tabs switch here; everything else is a viewer command, shown in the viewer.
 void listen<string>('menu', (e) => {
   const id = e.payload
   if (id.startsWith('tab:')) { switchTab(id.slice(4)); return }
+  if (EDIT_ITEMS.has(id)) {
+    if (editText(id) || activeTab !== 'viewer') return
+    void import('./viewer/bus').then(({ emit }) => emit('menu', { id }))
+    return
+  }
   const fromOtherTab = activeTab !== 'viewer'
   switchTab('viewer')
   if (fromOtherTab && !SAFE_FROM_OTHER_TABS.test(id)) return

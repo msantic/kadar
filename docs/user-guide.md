@@ -72,6 +72,7 @@ After you allow Screen Recording, quit Kadar and open it again.
 - Click a favorite to open that folder.
 - Click **+** to add the open folder to Favorites. If no folder is open, Kadar asks you to select a folder.
 - Click **×** next to a favorite to remove it. The folder itself stays on your Mac.
+- Double-click a favorite to change its name in the sidebar. Press **Return** to keep the new name or **Esc** to cancel. The folder on your Mac keeps its name.
 
 **Locations**
 
@@ -476,7 +477,7 @@ The Screenshot tab takes a picture of the window of one app.
 - Kadar captures the largest window of the app. The window must be visible on the screen.
 - Kadar does not play the camera sound.
 - Trim is in screen points. On a Retina screen, Kadar removes two times as many image pixels.
-- Next to Trim and Scale, Kadar shows the size of the result, for example "→ 1924 × 1080". Kadar uses the size in the size fields. The value is correct after you click **Resize**.
+- Next to Scale, Kadar shows the size of the result in pixels, for example "→ about 1924 × 1080 px". Kadar uses the size in the size fields and the pixels of your screen. The value is exact after you click **Resize**.
 - WebP screenshots use quality 90.
 - The file name is "screenshot-" and a number, for example "screenshot-1760000000000.png".
 
@@ -502,7 +503,7 @@ Next to the size, Kadar shows the shape when it is a common one, for example "16
 
 The button shows "Done ✓" when the resize worked, or "Failed" when it did not. Hold the pointer on "Failed" to see the reason.
 
-In the Record tab, Resize does nothing when **Entire screen** is selected.
+In the Record tab, the **Resize** button is off when **Entire screen** is selected.
 
 ---
 
@@ -522,6 +523,8 @@ In the Record tab, Resize does nothing when **Entire screen** is selected.
 | ⌘H | Kadar › Hide Kadar | Hides Kadar. |
 | ⌥⌘H | Kadar › Hide Others | Hides all other apps. |
 | ⌘Q | Kadar › Quit Kadar | Quits Kadar. |
+
+Edit › Undo, Copy and Select All act on the text when you type in a field. Otherwise they act on the files in the Viewer, also when you click them with the mouse.
 
 Most commands in the File, Edit, View and Go menus act in the Viewer. If you use one in a different tab, Kadar shows the Viewer tab. Commands that change files (for example Move to Trash or Rename) do not run then. Look at the selection, then use the command again.
 
@@ -643,10 +646,10 @@ Kadar does **not** remember these things after you quit:
 
 Kadar can open images and videos from Finder:
 
-- Right-click a file in Finder, choose **Open With**, then choose **Kadar**.
-- Drop images or videos on the Kadar icon in the Dock.
+- Right-click a file or a folder in Finder, choose **Open With**, then choose **Kadar**.
+- Drop images, videos or a folder on the Kadar icon in the Dock.
 
-Kadar then shows the folder of the file, selects the files and shows the first one in the big view. If the filter hides that file, Kadar clears the filter. If Kadar is not open, it starts with these files.
+For a folder, Kadar opens that folder. For files, Kadar shows the folder of the file, selects the files and shows the first one in the big view. If the filter hides that file, Kadar clears the filter. If Kadar is not open, it starts with these files.
 
 ---
 

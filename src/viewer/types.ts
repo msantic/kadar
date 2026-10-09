@@ -106,7 +106,6 @@ export interface ViewerAPI {
     rename: (path: string, newName: string) => Promise<string>
     openDefault: (p: string) => Promise<string>
     watch: (p: string) => Promise<void>
-    unwatch: () => Promise<void>
     onChanged: (cb: (data: { dirPath: string }) => void) => Unsubscribe
   }
   thumb: {
@@ -118,7 +117,6 @@ export interface ViewerAPI {
     cancel: (requestId: string) => Promise<void>
     onReady: (cb: (data: { requestId: string; srcPath: string; cachePath: string }) => void) => Unsubscribe
     onError: (cb: (data: { requestId: string; srcPath: string; message: string }) => void) => Unsubscribe
-    onDone:  (cb: (data: { requestId: string }) => void) => Unsubscribe
   }
   meta: {
     get: (filePath: string) => Promise<FileMetadata>
@@ -142,6 +140,8 @@ export interface ViewerAPI {
     exportReference: (path: string, options: ExportOptions) => Promise<ExportResult>
     /** Many images with the same settings; a newer `run` stops an older one. */
     exportBatch: (paths: string[], options: ExportOptions, run: number) => Promise<BatchItem[]>
+    /** Stops the running batch at its next image; finished results stay. */
+    exportStop: () => Promise<void>
     onExportProgress: (cb: (p: { run: number; done: number; total: number }) => void) => Unsubscribe
     exportCopyMany: (results: string[]) => Promise<void>
     /** Saves each result next to its source; pairs are [source, result]. Returns the saved paths. */

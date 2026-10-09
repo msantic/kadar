@@ -51,8 +51,6 @@ struct Job {
 #[derive(Default)]
 struct Queue {
     jobs: VecDeque<Job>,
-    /// Jobs still queued or running, per request. "done" fires when it reaches zero.
-    remaining: HashMap<String, usize>,
 }
 
 struct Shared {
@@ -89,8 +87,7 @@ impl ThumbService {
     }
 
     /// Returns cached thumbnails at once and queues the rest, newest request first. Each queued
-    /// file then sends "viewer:thumb:ready" or "viewer:thumb:error"; "viewer:thumb:done" follows
-    /// the last one. `target_size` is in CSS px; thumbnails are made at twice that.
+    /// file then sends "viewer:thumb:ready" or "viewer:thumb:error". `target_size` is in CSS px; thumbnails are made at twice that.
     pub fn request(&self, request_id: String, files: Vec<FileInfo>, target_size: u32) -> RequestResult {
         let mut cached = HashMap::new();
         let mut jobs = Vec::new();
@@ -120,7 +117,6 @@ impl ThumbService {
         let pending = jobs.iter().map(|j| j.src.clone()).collect();
         if !jobs.is_empty() {
             let mut q = crate::sync::lock(&self.shared.queue);
-            *q.remaining.entry(request_id).or_default() += jobs.len();
             // Newest request first: after a fast scroll, the rows on screen now come before the
             // rows passed on the way. Reversed, so the newest batch still starts at its top-left.
             q.jobs.extend(jobs.into_iter().rev());
@@ -129,20 +125,10 @@ impl ThumbService {
         RequestResult { cached, pending }
     }
 
-    /// Drops this request's jobs that have not started. Sends "viewer:thumb:done" when none are left.
+    /// Drops this request's jobs that have not started. Jobs already running finish; the page
+    /// ignores results for a cancelled request.
     pub fn cancel(&self, request_id: &str) {
-        let mut q = crate::sync::lock(&self.shared.queue);
-        let before = q.jobs.len();
-        q.jobs.retain(|j| j.request_id != request_id);
-        let dropped = before - q.jobs.len();
-        let Some(left) = q.remaining.get_mut(request_id) else { return };
-        *left -= dropped;
-        if *left == 0 {
-            q.remaining.remove(request_id);
-            drop(q);
-            let _ = self.shared.app.emit("viewer:thumb:done", json!({ "requestId": request_id }));
-        }
-        // Jobs already running finish; the page ignores results for a cancelled request.
+        crate::sync::lock(&self.shared.queue).jobs.retain(|j| j.request_id != request_id);
     }
 
     /// Cache path without extension; the file is `.jpg`, or `.png` when it has transparency.
@@ -211,20 +197,6 @@ fn worker_loop(shared: &Shared) {
                     json!({ "requestId": job.request_id, "srcPath": job.src, "message": message }),
                 );
             }
-        }
-
-        let mut q = crate::sync::lock(&shared.queue);
-        let finished = match q.remaining.get_mut(&job.request_id) {
-            Some(left) => {
-                *left -= 1;
-                *left == 0
-            }
-            None => false,
-        };
-        if finished {
-            q.remaining.remove(&job.request_id);
-            drop(q);
-            let _ = shared.app.emit("viewer:thumb:done", json!({ "requestId": job.request_id }));
         }
     }
 }

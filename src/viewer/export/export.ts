@@ -309,6 +309,8 @@ export function createExport(): HTMLElement {
   let batchSizes = new Map<string, number>()
   let batchItems: BatchItem[] = []
   let currentRun = 0
+  /** True while Rust works on a batch, so closing the screen can stop it. */
+  let batchRunning = false
   window.viewer.share.onExportProgress(({ run, done, total }) => {
     if (run === currentRun) info.textContent = `Working…  ${done} / ${total}`
   })
@@ -318,6 +320,7 @@ export function createExport(): HTMLElement {
     currentRun = run
     batchItems = []
     info.textContent = `Working…  0 / ${batch.length}`
+    batchRunning = true
     try {
       const items = await window.viewer.share.exportBatch(batch, options(), run)
       if (run !== currentRun) return
@@ -344,6 +347,8 @@ export function createExport(): HTMLElement {
       }))
     } catch (err) {
       if (run === currentRun) info.textContent = `Error: ${String(err)}`
+    } finally {
+      if (run === currentRun) batchRunning = false
     }
   }
 
@@ -508,6 +513,9 @@ export function createExport(): HTMLElement {
   }, { capture: true })
 
   function close(): void {
+    // A batch still at work stops at its next image; there is no one left to show it to.
+    if (batchRunning) void window.viewer.share.exportStop()
+    batchRunning = false
     root.hidden = true
     exportOpen = false
     img.removeAttribute('src')

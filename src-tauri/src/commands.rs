@@ -154,6 +154,12 @@ pub fn export_image(app: AppHandle, path: String, options: crate::export::Export
     crate::export::export(&path, &options, &dir)
 }
 
+/// Stops the running batch export at its next file; finished results stay.
+#[tauri::command]
+pub fn export_stop() {
+    crate::export::stop_batch();
+}
+
 /// Exports many images with the same settings. Reports "export-progress" { run, done, total }.
 /// A newer `run` stops an older one.
 #[tauri::command(async)]
@@ -248,12 +254,6 @@ pub fn open_default(path: String) -> String {
 #[tauri::command]
 pub fn watch_folder(app: AppHandle, watch: State<'_, FolderWatch>, path: String) {
     watch.watch(app, path);
-}
-
-/// Stops watching the folder.
-#[tauri::command]
-pub fn unwatch_folder(watch: State<'_, FolderWatch>) {
-    watch.unwatch();
 }
 
 /// Asks for thumbnails of a batch of files. Returns the cached ones now; the rest arrive as
@@ -429,6 +429,12 @@ pub fn start_drag(window: tauri::WebviewWindow, paths: Vec<String>, icon: String
 #[tauri::command(async)]
 pub fn copy_files(app: AppHandle, paths: Vec<String>) -> Result<(), String> {
     clipboard::copy_files(&app, paths)
+}
+
+/// Edit › Copy in a text field: copies the field's selected text.
+#[tauri::command(async)]
+pub fn copy_text(app: AppHandle, text: String) -> Result<(), String> {
+    clipboard::copy_text(&app, text)
 }
 
 /// Shift+Cmd+C: copies the full paths, one per line.

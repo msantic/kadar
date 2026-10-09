@@ -44,16 +44,19 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .close_window()
         .build()?;
 
+    // Undo, Copy and Select All are Kadar's own items, so a click with the mouse acts on files
+    // too. In a text field the window does the text action instead (see src/main.ts). Redo, Cut
+    // and Paste stay the Mac's standard items: they only ever act on text.
     let edit = SubmenuBuilder::new(app, "Edit")
-        .undo()
+        .item(&item(app, "undo", "Undo", Some("CmdOrCtrl+Z"))?)
         .redo()
         .separator()
         .cut()
-        .copy()
+        .item(&item(app, "copy", "Copy", Some("CmdOrCtrl+C"))?)
         .paste()
         .item(&item(app, "copy-paths", "Copy Path", Some("Shift+CmdOrCtrl+C"))?)
         .separator()
-        .select_all()
+        .item(&item(app, "select-all", "Select All", Some("CmdOrCtrl+A"))?)
         .item(&item(app, "filter", "Filter by Name", Some("CmdOrCtrl+F"))?)
         .build()?;
 

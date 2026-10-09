@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds the small ffmpeg that Kadar ships for video optimizing (Apple Silicon, macOS 13+).
+# Builds the small ffmpeg that Kadar ships for video optimizing (Apple Silicon, macOS 15+, as Kadar).
 #
 # Why not the Mac's own encoder: at the same file size its H.264 output is visibly worse than
 # x264 (blocky, soft text). Why not a stock ffmpeg: that is 45 MB. This one has only what the
@@ -14,7 +14,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/src-tauri/bin/ffmpeg-aarch64-apple-darwin"
 FFMPEG_VERSION="7.1.1"
 # Bump when the configure flags change, so existing copies are rebuilt.
-BUILD_ID="2"
+BUILD_ID="3"
 
 STAMP="$OUT.build-id"
 if [ -x "$OUT" ] && [ "$(cat "$STAMP" 2>/dev/null)" = "$BUILD_ID" ] && [ "${1:-}" != "--force" ]; then
@@ -24,7 +24,7 @@ fi
 WORK="$ROOT/src-tauri/target/ffmpeg-build"
 PREFIX="$WORK/prefix"
 JOBS="$(sysctl -n hw.ncpu)"
-export MACOSX_DEPLOYMENT_TARGET=13.0
+export MACOSX_DEPLOYMENT_TARGET=15.0
 mkdir -p "$WORK"
 cd "$WORK"
 
