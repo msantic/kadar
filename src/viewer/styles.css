@@ -592,3 +592,31 @@
 .viewer-info-value { color: var(--text); word-break: break-word; font-variant-numeric: tabular-nums; }
 .viewer-info-link { background: none; border: none; padding: 0; color: var(--accent); font: inherit; cursor: pointer; }
 .viewer-info-link:hover { text-decoration: underline; }
+
+/* Subfolder tiles in the grid */
+.viewer-cell[data-kind="folder"] .viewer-cell-thumb {
+  background: var(--surface) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 52'><path d='M4 8a4 4 0 0 1 4-4h16l6 6h26a4 4 0 0 1 4 4v30a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z' fill='%233a8ff7'/><path d='M4 16h56v28a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z' fill='%2364a9ff'/></svg>") center / 46% no-repeat;
+}
+.viewer-cell[data-kind="folder"] .viewer-cell-img { display: none; }
+
+/* Clickable folder path in the toolbar */
+.viewer-path {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 2px;
+  direction: ltr;
+}
+.viewer-path-part {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 1px 4px;
+  border-radius: 4px;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.viewer-path-part:last-child { color: var(--text-2); }
+.viewer-path-part:hover { background: var(--surface-hi); color: var(--text); }
+.viewer-path-sep { flex-shrink: 0; color: var(--muted); opacity: 0.6; }

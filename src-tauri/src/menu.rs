@@ -82,9 +82,15 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .fullscreen()
         .build()?;
 
+    let go = SubmenuBuilder::new(app, "Go")
+        .item(&item(app, "go:back", "Back", Some("CmdOrCtrl+["))?)
+        .item(&item(app, "go:forward", "Forward", Some("CmdOrCtrl+]"))?)
+        .item(&item(app, "go:up", "Enclosing Folder", Some("CmdOrCtrl+Up"))?)
+        .build()?;
+
     let window = SubmenuBuilder::new(app, "Window").minimize().maximize().build()?;
 
-    Menu::with_items(app, &[&app_menu, &file, &edit, &view, &window])
+    Menu::with_items(app, &[&app_menu, &file, &edit, &view, &go, &window])
 }
 
 /// Sends a clicked menu item to the window.

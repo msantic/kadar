@@ -23,7 +23,11 @@ export async function showContextMenu(x: number, y: number): Promise<void> {
     items: [
       await MenuItem.new({
         text: 'Open',
-        action: () => { if (focusIndex >= 0) emit('lightbox:open', { index: focusIndex }) },
+        action: () => {
+          const e = entries[focusIndex]
+          if (e?.kind === 'folder') emit('folder:request', { path: e.path })
+          else if (focusIndex >= 0) emit('lightbox:open', { index: focusIndex })
+        },
       }),
       await MenuItem.new({
         text: many ? `Open ${n} Files in Default App` : 'Open in Default App',

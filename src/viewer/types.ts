@@ -1,4 +1,5 @@
-export type Kind = 'image' | 'video' | 'unsupported'
+/** 'folder' is a subfolder tile in the grid; Rust lists folders separately. */
+export type Kind = 'image' | 'video' | 'unsupported' | 'folder'
 
 export interface FolderEntry {
   name: string

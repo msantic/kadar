@@ -7,6 +7,8 @@ export interface BusEvents {
   /** Short message at the bottom; with `action`, it shows a button and stays longer. */
   'toast': { text: string; action?: { label: string; run: () => void } }
   'folder:refresh': void
+  /** Go up, back or forward in the folder history. */
+  'folder:go': { to: 'up' | 'back' | 'forward' }
   'rename:start': void
   'export:open': { path: string }
   /** A menu bar item, by its id. */

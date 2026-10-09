@@ -222,7 +222,9 @@ export function createLightbox(): LightboxHandle {
   function drawCaption(): void {
     const { entries, lightboxIndex } = getState()
     if (!current || lightboxIndex === null) return
-    const parts = [`${current.name}  —  ${lightboxIndex + 1} / ${entries.length}`]
+    // The counter counts images and videos only, not the subfolder tiles before them.
+    const folders = entries.filter((e) => e.kind === 'folder').length
+    const parts = [`${current.name}  —  ${lightboxIndex + 1 - folders} / ${entries.length - folders}`]
     if (!img.hidden && img.naturalWidth) {
       parts.push(`${img.naturalWidth} × ${img.naturalHeight}`)
       parts.push(formatBytes(current.size))
@@ -249,6 +251,10 @@ export function createLightbox(): LightboxHandle {
     const { entries } = getState()
     if (index < 0 || index >= entries.length) return
     const entry = entries[index]!
+    if (entry.kind === 'folder') {
+      emit('folder:request', { path: entry.path })
+      return
+    }
     current = entry
     selectOnly(index)
     setState({ lightboxIndex: index })
@@ -282,10 +288,14 @@ export function createLightbox(): LightboxHandle {
     preloadAround(index)
   }
 
+  /** Next or previous image or video; subfolder tiles are skipped. */
   function step(delta: number): void {
     const cur = getState().lightboxIndex
     if (cur === null) return
-    show(cur + delta)
+    const { entries } = getState()
+    let i = cur + delta
+    while (i >= 0 && i < entries.length && entries[i]!.kind === 'folder') i += delta
+    if (i >= 0 && i < entries.length) show(i)
   }
 
   root.addEventListener('click', (e) => {

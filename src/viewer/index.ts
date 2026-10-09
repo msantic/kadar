@@ -2,7 +2,7 @@ import { api } from './ipc'
 import { emit, on } from './bus'
 import { getSession, updateSession } from './session'
 import {
-  copySelection, openSelectionDefault, optimizeSelection, restoreSelection, selectedPaths, trashSelection,
+  copySelection, openSelectionDefault, optimizeSelection, restoreSelection, selectedPaths, selectOnly, trashSelection,
 } from './selection'
 import { createExport } from './export/export'
 import { defaultDescending, SORT_LABELS, sortEntries, type SortBy } from './sort'
@@ -46,9 +46,25 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
 
   const toolbar = document.createElement('div')
   toolbar.className = 'viewer-toolbar'
-  const pathEl = document.createElement('span')
+  // The folder path: each part opens that folder. The end stays visible on long paths.
+  const pathEl = document.createElement('div')
   pathEl.className = 'viewer-path'
   pathEl.textContent = 'No folder selected'
+  function drawPath(dir: string): void {
+    const parts = dir.split('/').filter(Boolean)
+    const nodes: Node[] = []
+    parts.forEach((name, i) => {
+      if (i > 0) nodes.push(Object.assign(document.createElement('span'), { className: 'viewer-path-sep', textContent: '›' }))
+      const btn = document.createElement('button')
+      btn.className = 'viewer-path-part'
+      btn.textContent = name
+      const target = `/${parts.slice(0, i + 1).join('/')}`
+      btn.title = target
+      btn.addEventListener('click', () => emit('folder:request', { path: target }))
+      nodes.push(btn)
+    })
+    pathEl.replaceChildren(...nodes)
+  }
   const openBtn = document.createElement('button')
   openBtn.className = 'viewer-ghost-btn'
   openBtn.textContent = 'Open Folder…'
@@ -164,11 +180,58 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
   layout.append(sidebar, main)
   panel.append(layout, lightbox.root, createExport())
 
-  on('folder:request', ({ path }) => {
-    if (getState().currentFolder === path) return
+  // Folder history for Back and Forward (⌘[ and ⌘]), as in Finder.
+  const backStack: string[] = []
+  const forwardStack: string[] = []
+
+  /** Opens a folder. `select` picks a file or subfolder in it, for example the one you came from. */
+  async function openFolder(path: string, select?: string): Promise<void> {
     updateSession({ folder: path, topPath: null, topIndex: 0, selectedPath: null, selectedPaths: [], anchorPath: null, bigView: false, filter: '' })
     filterInput.value = ''
-    void loadFolder(path)
+    await loadFolder(path)
+    if (!select || getState().currentFolder !== path) return
+    const index = getState().entries.findIndex((e) => e.path === select)
+    if (index >= 0) {
+      selectOnly(index)
+      grid.scrollToIndex(index)
+    }
+  }
+
+  on('folder:request', ({ path }) => {
+    const current = getState().currentFolder
+    if (current === path) return
+    if (current) backStack.push(current)
+    forwardStack.length = 0
+    void openFolder(path)
+  })
+
+  on('folder:go', ({ to }) => {
+    const current = getState().currentFolder
+    if (!current) return
+    if (to === 'up') {
+      const parent = current.slice(0, current.lastIndexOf('/')) || '/'
+      if (parent === current) return
+      backStack.push(current)
+      forwardStack.length = 0
+      void openFolder(parent, current)
+    } else if (to === 'back' && backStack.length > 0) {
+      forwardStack.push(current)
+      void openFolder(backStack.pop()!, current)
+    } else if (to === 'forward' && forwardStack.length > 0) {
+      backStack.push(current)
+      void openFolder(forwardStack.pop()!)
+    }
+  })
+
+  // ⌘↑ parent folder, ⌘[ back, ⌘] forward, while the grid is in front.
+  window.addEventListener('keydown', (e) => {
+    if (!e.metaKey || e.defaultPrevented || main.offsetParent === null || getState().lightboxIndex !== null) return
+    const t = e.target as HTMLElement | null
+    if (t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) return
+    const to = e.key === 'ArrowUp' ? 'up' : e.key === '[' ? 'back' : e.key === ']' ? 'forward' : null
+    if (!to) return
+    e.preventDefault()
+    emit('folder:go', { to })
   })
 
   // Back to where you were: folder, top of the grid, selected image, open big view.
@@ -216,10 +279,19 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     })
   }
 
-  // Every file of the folder, before the name filter; the grid shows `view()` of it.
+  // Every file and subfolder, before the name filter; the grid shows `view()` of them:
+  // subfolders first (by name), then the files in the chosen order.
   let allFiles: FileEntry[] = []
-  const view = (): FileEntry[] =>
-    filterEntries(sortEntries(allFiles, getSession().sortBy, getSession().sortDescending), getSession().filter)
+  let allFolders: FileEntry[] = []
+  const view = (): FileEntry[] => {
+    const { sortBy, sortDescending, filter } = getSession()
+    return [
+      ...filterEntries(sortEntries(allFolders, 'name', false), filter),
+      ...filterEntries(sortEntries(allFiles, sortBy, sortDescending), filter),
+    ]
+  }
+  const folderTiles = (folders: { name: string; path: string }[]): FileEntry[] =>
+    folders.map((f) => ({ name: f.name, path: f.path, ext: '', kind: 'folder', size: 0, mtimeMs: 0, createdMs: 0 }))
 
   /** Camera dates are read only when "Date Taken" sorts the grid; later reads come from a cache. */
   async function ensureTaken(list: FileEntry[]): Promise<void> {
@@ -256,13 +328,14 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
       currentFolder: dirPath, entries: [], folders: [], truncated: false, loading: true,
       selectedPath: null, selection: new Set(), anchorPath: null,
     })
-    pathEl.textContent = dirPath
+    drawPath(dirPath)
     countEl.textContent = 'Loading…'
     const listing = await api.fs.listFolder(dirPath)
     if (getState().currentFolder !== dirPath) return
     await ensureTaken(listing.files)
     if (getState().currentFolder !== dirPath) return
     allFiles = listing.files
+    allFolders = folderTiles(listing.folders)
     setState({
       entries: view(),
       folders: listing.folders,
@@ -276,8 +349,10 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
   function showCount(): void {
     const { entries, selection, truncated } = getState()
     const total = allFiles.length
-    const shown = entries.length === total ? `${total}` : `${entries.length} of ${total}`
-    countEl.textContent = `${shown} ${total === 1 ? 'item' : 'items'}${truncated ? ' (truncated)' : ''}`
+    const files = entries.filter((e) => e.kind !== 'folder').length
+    const shown = files === total ? `${total}` : `${files} of ${total}`
+    const folders = allFolders.length > 0 ? `${allFolders.length} ${allFolders.length === 1 ? 'folder' : 'folders'}, ` : ''
+    countEl.textContent = `${folders}${shown} ${total === 1 ? 'item' : 'items'}${truncated ? ' (truncated)' : ''}`
       + (selection.size > 1 ? `  ·  ${selection.size} selected` : '')
   }
   subscribe((s, prev) => {
@@ -312,6 +387,10 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     const { entries, selectedPath, lightboxIndex } = getState()
     const focus = selectedPath ?? selectedPaths()[0] ?? null
     const focusEntry = entries.find((e) => e.path === focus)
+    if (id.startsWith('go:')) {
+      emit('folder:go', { to: id.slice(3) as 'up' | 'back' | 'forward' })
+      return
+    }
     if (id.startsWith('sort:')) {
       if (id === 'sort:reverse') sortDirBtn.click()
       else { sortSelect.value = id.slice(5); sortSelect.dispatchEvent(new Event('change')) }
@@ -359,13 +438,16 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     if (state.currentFolder !== dirPath) return
     // Nothing changed that the grid shows: skip, so the view does not redraw for nothing.
     const old = new Map(allFiles.map((e) => [e.path, e]))
-    const same = listing.files.length === allFiles.length
+    const folderKey = (list: { path: string }[]): string => list.map((f) => f.path).sort().join('\n')
+    const sameFolders = folderKey(listing.folders) === folderKey(allFolders)
+    const same = sameFolders && listing.files.length === allFiles.length
       && listing.files.every((f) => old.get(f.path)?.mtimeMs === f.mtimeMs && old.get(f.path)?.size === f.size)
     if (same) return
 
     await ensureTaken(listing.files)
     if (getState().currentFolder !== dirPath) return
     allFiles = listing.files
+    allFolders = folderTiles(listing.folders)
     const next = view()
     // Selected files may be gone; the open big view follows its image to its new place.
     setState({ entries: next, folders: listing.folders, truncated: listing.truncated })

@@ -42,7 +42,7 @@ export function assignCell(cell: CellHandle, entry: FileEntry, index: number, ca
   cell.label.textContent = entry.name
   cell.root.dataset['kind'] = entry.kind
   cell.badge.textContent = entry.kind === 'video' ? 'VIDEO' : entry.ext.toUpperCase()
-  cell.badge.hidden = entry.kind !== 'video' && !entry.ext
+  cell.badge.hidden = entry.kind === 'folder' || (entry.kind !== 'video' && !entry.ext)
   if (cachedUrl) {
     cell.img.src = fileUrl(cachedUrl)
     cell.img.classList.add('loaded')

@@ -103,9 +103,16 @@ export async function trashSelection(): Promise<void> {
   }
 }
 
-/** Cmd+O: opens the selected files in their default apps. */
+/** Cmd+O or Cmd+Down: a folder opens in Kadar; files open in their default apps. */
 export function openSelectionDefault(): void {
-  for (const path of selectedPaths()) void window.viewer.fs.openDefault(path)
+  const { entries, selectedPath } = getState()
+  const focused = entries.find((e) => e.path === selectedPath)
+  if (focused?.kind === 'folder') {
+    emit('folder:request', { path: focused.path })
+    return
+  }
+  const folders = new Set(entries.filter((e) => e.kind === 'folder').map((e) => e.path))
+  for (const path of selectedPaths()) if (!folders.has(path)) void window.viewer.fs.openDefault(path)
 }
 
 let optimizing = false

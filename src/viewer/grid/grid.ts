@@ -174,7 +174,9 @@ export function createGrid(): GridHandle {
       case 'End':        next = last; break
       case ' ':
         e.preventDefault()
-        if (current >= 0) emit('lightbox:open', { index: current })
+        if (current < 0) return
+        if (entries[current]!.kind === 'folder') emit('folder:request', { path: entries[current]!.path })
+        else emit('lightbox:open', { index: current })
         return
       // Return renames, as in Finder (Space opens).
       case 'Enter':
@@ -260,7 +262,7 @@ export function createGrid(): GridHandle {
     const entry = cell.entry
     if (!entry) return
     if (!getState().selection.has(entry.path)) selectOnly(cell.index)
-    const icon = loader.getCached(entry.path) ?? (entry.kind === 'image' ? entry.path : '')
+    const icon = loader.getCached(entry.path) ?? (entry.kind === 'image' ? entry.path : '/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericFolderIcon.icns')
     if (icon) void window.viewer.share.startDrag(selectedPaths(), icon).catch(() => {})
   })
 
@@ -278,7 +280,9 @@ export function createGrid(): GridHandle {
     })
     cell.root.addEventListener('click', (e) => handleClick(e, cell))
     cell.root.addEventListener('dblclick', () => {
-      if (cell.entry) emit('lightbox:open', { index: cell.index })
+      if (!cell.entry) return
+      if (cell.entry.kind === 'folder') emit('folder:request', { path: cell.entry.path })
+      else emit('lightbox:open', { index: cell.index })
     })
     cell.root.addEventListener('contextmenu', (e) => {
       e.preventDefault()
@@ -353,7 +357,7 @@ export function createGrid(): GridHandle {
       cell.root.style.visibility = 'visible'
       placeCell(cell, idx)
       indexToCell.set(idx, cell)
-      if (!loader.getCached(entry.path)) toRequest.push(entry)
+      if (entry.kind !== 'folder' && !loader.getCached(entry.path)) toRequest.push(entry)
     }
 
     if (toRequest.length > 0) loader.request(toRequest)
