@@ -219,10 +219,12 @@ when asked. `capture_resize_window` moves and sizes the app's front window with 
   **Put back** renames each file back and never replaces an existing file, then calls `platform::system::forget_trashed` (Windows deletes the bin's `$I` record; the Mac has none). Both feed Undo. On Windows, `trash` uses IFileOperation with a progress sink to learn each file's place in the Recycle Bin, and skips files that are gone.
 - **Rename** (`rename_file`): rejects empty names, `/`, NUL, `.`/`..`, and names already taken;
   a case-only change is allowed.
-- **Open With from Finder:** `RunEvent::Opened` pushes paths into `OpenedFiles` (managed on the
+- **Open With from Finder** (Mac): `RunEvent::Opened` pushes paths into `OpenedFiles` (managed on the
   Builder, before `setup`, because macOS can send files during launch), emits `open-paths`, and
   focuses the window. The window listens first, then calls `take_opened` once at start, so no file
-  is missed.
+  is missed. On Windows and Linux, files arrive as start arguments (`files_from_args`); a second
+  start is caught by `tauri-plugin-single-instance`, which hands its files to the running Kadar
+  (`commands::hand_over`, the same path the Mac event takes).
 - **Menu bar** (`menu.rs`, Mac only; Windows and Linux use `src/shortcuts.ts`): Kadar, File, Edit, View (with Sort By), Go, Window. A click emits
   `menu` with the item id; `main.ts` switches tabs for `tab:*` and forwards the rest to the viewer
   bus. From another tab, only commands that open or arrange the viewer run; commands on files

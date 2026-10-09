@@ -206,6 +206,31 @@ pub fn image_properties(path: String) -> Option<serde_json::Value> {
 #[derive(Default)]
 pub struct OpenedFiles(pub std::sync::Mutex<Vec<String>>);
 
+/// The files to open from a program's start line (Windows and Linux "Open with Kadar"): every
+/// argument after the program's own name that names an existing file or folder. (The Mac gets
+/// opened files as an event instead.)
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+pub fn files_from_args(args: impl IntoIterator<Item = String>) -> Vec<String> {
+    args.into_iter().skip(1).filter(|a| Path::new(a).exists()).collect()
+}
+
+/// Hands opened files to the running window: queues them, tells the window ("open-paths"), and
+/// brings the window to the front. Nothing happens for an empty list.
+pub fn hand_over(app: &AppHandle, paths: Vec<String>) {
+    use tauri::Emitter;
+    if paths.is_empty() {
+        return;
+    }
+    if let Some(opened) = app.try_state::<OpenedFiles>() {
+        crate::sync::lock(&opened.0).extend(paths);
+    }
+    let _ = app.emit("open-paths", ());
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
 /// One opened path, and whether it is a folder.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -432,6 +457,17 @@ pub fn copy_paths(app: AppHandle, paths: Vec<String>) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::rename_file;
+
+    #[test]
+    fn start_line_files_are_the_existing_paths_after_the_program() {
+        let dir = crate::testutil::temp_dir("args");
+        let photo = dir.join("a.jpg");
+        std::fs::write(&photo, b"x").unwrap();
+        let p = photo.to_string_lossy().into_owned();
+        let args = ["kadar.exe".to_string(), p.clone(), "--flag".into(), dir.join("gone.jpg").to_string_lossy().into_owned()];
+        assert_eq!(super::files_from_args(args), [p]);
+        assert!(super::files_from_args(["kadar.exe".to_string()]).is_empty());
+    }
 
     #[test]
     fn rename_rules() {

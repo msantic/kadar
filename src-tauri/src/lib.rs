@@ -27,7 +27,7 @@ use std::time::Duration;
 
 use tauri::{AppHandle, Manager, WindowEvent};
 #[cfg(target_os = "macos")]
-use tauri::{Emitter, RunEvent};
+use tauri::RunEvent;
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
 /// Builds and runs the app; returns only when Kadar quits. Panics if Tauri fails to start.
@@ -39,6 +39,12 @@ pub fn run() {
     let builder = builder
         .menu(menu::build)
         .on_menu_event(|app, event| menu::forward(app, event.id().as_ref()));
+    // Windows and Linux start a new program for every "Open with Kadar". One Kadar at a time:
+    // a second start hands its files to the Kadar that runs and quits (the Mac does this itself).
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+        commands::hand_over(app, commands::files_from_args(args));
+    }));
     builder
         // Before everything else: Finder can hand over files before the app is fully set up.
         .manage(commands::OpenedFiles::default())
@@ -50,11 +56,8 @@ pub fn run() {
         .setup(|app| {
             // Windows and Linux hand files to open as start arguments ("Open with Kadar").
             #[cfg(not(target_os = "macos"))]
-            {
-                let paths: Vec<String> = std::env::args().skip(1).filter(|a| std::path::Path::new(a).exists()).collect();
-                if let Some(opened) = app.try_state::<commands::OpenedFiles>() {
-                    crate::sync::lock(&opened.0).extend(paths);
-                }
+            if let Some(opened) = app.try_state::<commands::OpenedFiles>() {
+                crate::sync::lock(&opened.0).extend(commands::files_from_args(std::env::args()));
             }
             // A dark title bar on Windows, to match Kadar's dark window.
             #[cfg(target_os = "windows")]
@@ -131,22 +134,8 @@ pub fn run() {
             // wait in a queue: at launch the window is not ready yet and takes them when it is.
             #[cfg(target_os = "macos")]
             if let RunEvent::Opened { urls } = event {
-                let paths: Vec<String> = urls
-                    .iter()
-                    .filter_map(|u| u.to_file_path().ok())
-                    .map(|p| p.to_string_lossy().into_owned())
-                    .collect();
-                if paths.is_empty() {
-                    return;
-                }
-                if let Some(opened) = app.try_state::<commands::OpenedFiles>() {
-                    crate::sync::lock(&opened.0).extend(paths);
-                }
-                let _ = app.emit("open-paths", ());
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.unminimize();
-                    let _ = window.set_focus();
-                }
+                let paths = urls.iter().filter_map(|u| u.to_file_path().ok()).map(|p| p.to_string_lossy().into_owned()).collect();
+                commands::hand_over(app, paths);
             }
         });
 }

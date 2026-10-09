@@ -206,8 +206,9 @@ desktopheight:i:1000
 - **Video:** optimizing works with the bundled ffmpeg (built for Windows, 10.7 MB, static).
 - **Drag out:** the shell's own file drag (the same as File Explorer's), Copy only.
 - **Installer:** yes, not signed (see "The installer").
-- **Not yet:** Screenshot, Record, and one Kadar at a time (today "Open with Kadar" on a second file
-  starts a second Kadar window instead of showing the file in the first).
+- **One Kadar at a time:** "Open with Kadar" while Kadar runs shows the file in the open Kadar
+  (`tauri-plugin-single-instance`; the second start hands its files over and quits).
+- **Not yet:** Screenshot and Record.
 - **Names:** Kadar refuses new names with `\ : * ? " < > |`, as Windows does.
 - **Undo after the Recycle Bin** moves the file back and removes the bin's record of it, so the
   Recycle Bin does not list a file that is no longer there.

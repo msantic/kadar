@@ -42,6 +42,10 @@ block2 = "0.6.2"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSPasteboard", "NSPasteboardItem", "NSApplication", "NSDragging", "NSDraggingItem", "NSDraggingSession", "NSEvent", "NSGraphics", "NSGraphicsContext", "NSImage", "NSResponder", "NSView", "NSWindow", "objc2-core-foundation"] }
 libc = "0.2.190"
 
+# Windows and Linux: one Kadar at a time ("Open with Kadar" on a second file goes to the open one).
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+tauri-plugin-single-instance = "2"
+
 # Windows only: WIC decodes and scales images, the shell gives video frames, the Recycle Bin and
 # opening files, the clipboard holds copied files. Used only by src/platform/windows/.
 [target.'cfg(target_os = "windows")'.dependencies]
