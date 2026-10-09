@@ -32,6 +32,7 @@ Read README.md first: it has what Kadar does and which file does what. This file
 - **ScreenCaptureKit in `cargo test`** aborts with CGS_REQUIRE_INIT. Call `NSApplicationLoad()` first.
 - **loudnorm before AAC** needs `aresample=48000` after it. loudnorm outputs 192 kHz, and the AAC encoder rejects it.
 - **Files opened from Finder arrive before setup.** macOS sends them while the app still launches. Anything the open handler uses must be managed on the Builder, not in `setup()`, or the app aborts at launch.
+- **Dragging files out:** start the Mac drag from mouse movement, never from the page's `dragstart`. The page's own drag shares the Mac's drag clipboard and wipes the files, so every app refuses the drop. Allow only Copy: with Generic or Move, Finder moves the owner's file away.
 - **Changing the ffmpeg build flags:** bump `BUILD_ID` in `scripts/build-ffmpeg.sh`, or old copies stay in use.
 
 ## Checking the running app

@@ -210,7 +210,6 @@ export function createGrid(): GridHandle {
     input.value = entry.name
     input.spellcheck = false
     cell.label.hidden = true
-    cell.root.draggable = false
     cell.root.appendChild(input)
     editing = { input }
     input.focus()
@@ -224,7 +223,6 @@ export function createGrid(): GridHandle {
       const name = input.value.trim()
       input.remove()
       cell.label.hidden = false
-      cell.root.draggable = true
       editing = null
       if (!save || !name || name === entry.name) return
       try {
@@ -247,27 +245,40 @@ export function createGrid(): GridHandle {
     }
   }
 
+  // ─── Drag out ─────────────────────────────────────────────────────────────
+  // The selected files (or the pressed one) go out as a Mac file drag, into Finder, browsers and
+  // chats. The page's own drag stays off: it shares the Mac's drag clipboard and would wipe the
+  // files when it starts after Kadar's drag.
+  let pressed: { cell: CellHandle; x: number; y: number } | null = null
+  window.addEventListener('mouseup', () => { pressed = null })
+  window.addEventListener('mousemove', (e) => {
+    if (!pressed) return
+    if ((e.buttons & 1) === 0) { pressed = null; return }
+    if (Math.hypot(e.clientX - pressed.x, e.clientY - pressed.y) < 5) return
+    const { cell } = pressed
+    pressed = null
+    const entry = cell.entry
+    if (!entry) return
+    if (!getState().selection.has(entry.path)) selectOnly(cell.index)
+    const icon = loader.getCached(entry.path) ?? (entry.kind === 'image' ? entry.path : '')
+    if (icon) void window.viewer.share.startDrag(selectedPaths(), icon).catch(() => {})
+  })
+
   function recycleCell(): CellHandle {
     const cell = createCell()
     cellPool.push(cell)
     canvas.appendChild(cell.root)
     // Shift+click and double-click must not start a text selection or move the keyboard focus.
-    cell.root.addEventListener('mousedown', (e) => { if (e.shiftKey || e.metaKey || e.detail > 1) e.preventDefault() })
+    cell.root.addEventListener('mousedown', (e) => {
+      if (e.shiftKey || e.metaKey || e.detail > 1) e.preventDefault()
+      // A possible drag out starts here; it begins once the mouse moves a few pixels.
+      if (e.button === 0 && !e.shiftKey && !e.metaKey && cell.entry && !editing) {
+        pressed = { cell, x: e.clientX, y: e.clientY }
+      }
+    })
     cell.root.addEventListener('click', (e) => handleClick(e, cell))
     cell.root.addEventListener('dblclick', () => {
       if (cell.entry) emit('lightbox:open', { index: cell.index })
-    })
-    // Drag out: the selected files when this one is selected, else just this one. The web drag
-    // only starts it; the Mac's own drag carries real files to Finder, browsers and chats.
-    cell.root.draggable = true
-    cell.root.addEventListener('dragstart', (e) => {
-      e.preventDefault()
-      const entry = cell.entry
-      if (!entry) return
-      if (!getState().selection.has(entry.path)) selectOnly(cell.index)
-      const paths = selectedPaths()
-      const icon = loader.getCached(entry.path) ?? (entry.kind === 'image' ? entry.path : '')
-      if (icon) void window.viewer.share.startDrag(paths, icon).catch(() => {})
     })
     cell.root.addEventListener('contextmenu', (e) => {
       e.preventDefault()

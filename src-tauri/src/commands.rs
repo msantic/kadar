@@ -326,7 +326,7 @@ pub fn record_stop(app: AppHandle, rec: State<'_, Recorder>) -> Result<String, S
 }
 
 /// Drags files out of Kadar (into Finder, browsers, chats), as Finder does.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn start_drag(window: tauri::WebviewWindow, paths: Vec<String>, icon: String) -> Result<(), String> {
     crate::drag::start(&window, paths, icon)
 }

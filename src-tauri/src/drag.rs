@@ -1,17 +1,12 @@
-//! Dragging files out of Kadar, the way Finder does it, so every app accepts the drop:
-//! - each file as its own item with a file URL, plus the old-style list of paths that some apps
-//!   and browsers still read;
-//! - Copy, Generic and Link allowed. Many apps answer a drop with "Generic"; a drag that allows
-//!   only "Copy" then shows no drop area (seen with WhatsApp). Move is not allowed, so no app can
-//!   take Kadar's files away.
+//! Dragging files out of Kadar as file links, the same content as a Finder drag.
+//! Only Copy is allowed: with Generic or Move allowed, Finder moves the file out of its folder.
 
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, ProtocolObject};
 use objc2::{define_class, msg_send, AllocAnyThread, MainThreadOnly};
 use objc2_app_kit::{
     NSApplication, NSDragOperation, NSDraggingContext, NSDraggingItem, NSDraggingSession, NSDraggingSource,
-    NSEvent, NSEventModifierFlags, NSEventType, NSImage, NSPasteboardItem, NSPasteboardTypeFileURL,
-    NSPasteboardWriting, NSWindow,
+    NSEvent, NSEventModifierFlags, NSEventType, NSImage, NSPasteboardWriting, NSWindow,
 };
 use objc2_foundation::{MainThreadMarker, NSArray, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString, NSURL};
 use tauri::WebviewWindow;
@@ -31,7 +26,8 @@ define_class!(
     unsafe impl NSDraggingSource for DragSource {
         #[unsafe(method(draggingSession:sourceOperationMaskForDraggingContext:))]
         fn operations(&self, _session: &NSDraggingSession, _context: NSDraggingContext) -> NSDragOperation {
-            NSDragOperation::Copy | NSDragOperation::Generic | NSDragOperation::Link
+            // Copy only: with Generic or Move allowed, Finder moves the file out of its folder.
+            NSDragOperation::Copy
         }
     }
 );
@@ -43,7 +39,9 @@ impl DragSource {
     }
 }
 
-/// Starts a file drag at the pointer. Call while the mouse button is down (from a dragstart).
+/// Starts a file drag at the pointer. Call while the mouse button is down: the window starts it
+/// from mouse movement, never from the page's own drag (that one would wipe the Mac's drag
+/// clipboard after Kadar wrote the files to it, and every app would then refuse the drop).
 pub fn start(window: &WebviewWindow, paths: Vec<String>, icon: String) -> Result<(), String> {
     if paths.is_empty() {
         return Ok(());
@@ -73,23 +71,13 @@ fn begin(window: &NSWindow, paths: &[String], icon: &str) {
     }
     let size = image.as_ref().map_or(NSSize::new(DRAG_IMAGE_SIZE, DRAG_IMAGE_SIZE), |i| i.size());
 
-    let all_paths: Vec<Retained<NSString>> = paths.iter().map(|p| NSString::from_str(p)).collect();
-    let all_paths = NSArray::from_retained_slice(&all_paths);
-    let legacy = NSString::from_str("NSFilenamesPboardType");
-
     let items: Vec<Retained<NSDraggingItem>> = paths
         .iter()
         .enumerate()
         .map(|(i, path)| {
-            let item = NSPasteboardItem::new();
+            // The file URL itself writes what Finder's drag carries.
             let url = NSURL::fileURLWithPath(&NSString::from_str(path));
-            if let Some(s) = url.absoluteString() {
-                unsafe { item.setString_forType(&s, NSPasteboardTypeFileURL) };
-            }
-            if i == 0 {
-                unsafe { item.setPropertyList_forType(&all_paths, &legacy) };
-            }
-            let writer: Retained<ProtocolObject<dyn NSPasteboardWriting>> = ProtocolObject::from_retained(item);
+            let writer: Retained<ProtocolObject<dyn NSPasteboardWriting>> = ProtocolObject::from_retained(url);
             let drag = NSDraggingItem::initWithPasteboardWriter(NSDraggingItem::alloc(), &writer);
             // Several files show as a small fanned stack.
             let offset = (i.min(4) as f64) * 6.0;
