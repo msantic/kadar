@@ -216,7 +216,7 @@ desktopheight:i:1000
 
 | Symptom | Cause and fix |
 |---|---|
-| `resource path bin\ffmpeg-x86_64-pc-windows-msvc.exe doesn't exist` | Tauri wants the video tool for every build. Put the Windows ffmpeg there, or a placeholder file until it exists. |
+| `resource path bin\ffmpeg-x86_64-pc-windows-msvc.exe doesn't exist` | Tauri wants the video tool for every build, and `bin/` is not in git. Build it once ("The video tool" above). |
 | PowerShell says "The ampersand (&) character is not allowed" | The shell is PowerShell, not cmd. Use `;` between commands, or `cmd /c "..."` for cmd syntax. `scripts/win.sh` avoids quoting problems. |
 | A `cargo` or `npm` line prints nothing over SSH | Their output goes to the error stream. Wrap them: `cmd /c "cargo test 2>&1"`. |
 | A long tool (pacman, a build) stops at its first progress line | `scripts/win.sh` stops at the first error, and PowerShell 5 counts any line a native tool writes to the error stream as one when it is redirected with `2>&1`. Start such a script with `$ErrorActionPreference = "Continue"` and run the tool through `cmd /c "... 2>&1"`. |

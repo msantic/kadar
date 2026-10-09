@@ -371,6 +371,9 @@ not also handle — or make sure the window calls `preventDefault()`.
 - `Info.plist` adds the microphone and Apple Events prompt texts.
 - Capabilities (`capabilities/default.json`): `core:default`, window dragging, badge label, menu.
 - Release profile: `opt-level 3`, LTO, one codegen unit, stripped. App size ~15 MB matters.
+- Windows: `npx tauri build --bundles nsis` on the office server's Windows machine makes an
+  unsigned per-user installer (`kadar.exe`, `ffmpeg.exe`); `npm run share:windows` runs it from the
+  Mac. `icons/icon.ico` is the Windows icon. Details: [windows.md](windows.md).
 - Steps: [development.md](development.md).
 
 ## 7. Tests

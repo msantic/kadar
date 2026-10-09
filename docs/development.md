@@ -34,6 +34,7 @@ Later runs start in seconds.
 | `npm run dev` | Runs Kadar with live reload. Window code reloads at once; Rust changes rebuild and restart the app. |
 | `npm run check` | Runs every automatic check (see [Checks](#checks)). |
 | `npm run share` | Builds, then makes the notarized installer to share (see [Share Kadar](#share-kadar)). |
+| `npm run share:windows` | Makes the Windows installer on the office server's Windows machine and copies it here ([windows.md](windows.md#the-installer-share-kadar-for-windows)). |
 | `npm run build` | Builds ffmpeg if needed, runs every check, then builds the signed `Kadar.app` and `.dmg` in `src-tauri/target/release/bundle/`. Stops on the first failed check. |
 | `node scripts/check-docs.mjs` | Runs only the documentation check. |
 | `scripts/build-ffmpeg.sh --force` | Builds ffmpeg again, even when the current copy is up to date. |

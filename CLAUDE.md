@@ -24,7 +24,7 @@ Read README.md first. Then the guides in `docs/`: [architecture](docs/architectu
 - Windows and Linux builds run on the **BIMTLY office server** (`ssh marko@10.10.10.4`, Ubuntu 24.04). It is part of the BIMTLY infrastructure and DevOps setup; its runbook and faults are in `~/dev/bimtly/devops/conf/office/vm/README.md`. Read it before any work on it.
 - **Windows:** the `winbuild` virtual machine (Windows 11) on that server. From the server: `ssh build@192.168.122.12` (PowerShell, not cmd). Start and stop it with `make start` / `make stop` in `/etc/bimtly/conf/office/vm` on the server. It runs on demand only: the server also runs production, and the BIMTLY Showroom uses the same machine. Do not leave it running, and do not stop it while someone else uses it — ask first.
 - **Linux:** planned as a separate small virtual machine on the same server, never builds on the server itself.
-- Everything is driven from the owner's Mac over SSH: `scripts/win.sh` (run PowerShell there), `scripts/win-sync.sh` (send unsaved work). To show Kadar to the owner: the remote screen through an SSH tunnel. Every step, the password handling and the traps: **docs/windows.md**. Plan: Roadmap in README.md.
+- Everything is driven from the owner's Mac over SSH: `scripts/win.sh` (run PowerShell there), `scripts/win-sync.sh` (send unsaved work), `npm run share:windows` (the Windows installer, unsigned by choice). To show Kadar to the owner: the remote screen through an SSH tunnel. Every step, the password handling and the traps: **docs/windows.md**. Plan: Roadmap in README.md.
 
 ## How the parts connect
 
