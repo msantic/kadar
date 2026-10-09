@@ -22,7 +22,7 @@ uuid = { version = "1.27.0", features = ["v4"] }
 
 # macOS frameworks: ImageIO decodes and scales images, AVFoundation reads video frames.
 objc2 = "0.6.5"
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSURL", "NSError", "NSArray", "NSObject", "NSFileManager"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSURL", "NSError", "NSArray", "NSObject", "NSFileManager", "NSGeometry", "NSThread"] }
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFString", "CFDictionary", "CFNumber", "CFURL", "CFCGTypes", "CFData", "CFArray"] }
 objc2-core-graphics = { version = "0.3.2", default-features = false, features = ["std", "CGImage", "CGContext", "CGColorSpace", "CGBitmapContext", "CGWindow"] }
 objc2-image-io = { version = "0.3.2", default-features = false, features = ["std", "CGImageSource", "CGImageDestination", "CGImageProperties", "objc2-core-graphics"] }
@@ -35,8 +35,7 @@ oxipng = { version = "10.2.1", default-features = false }
 objc2-screen-capture-kit = { version = "0.3.2", default-features = false, features = ["std", "block2", "libc", "SCShareableContent", "SCStream", "SCRecordingOutput", "objc2-core-foundation", "objc2-core-graphics", "objc2-core-media", "objc2-av-foundation"] }
 block2 = "0.6.2"
 tauri-plugin-window-state = "2"
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSPasteboard", "NSPasteboardItem"] }
-tauri-plugin-drag = "2.1.1"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSPasteboard", "NSPasteboardItem", "NSApplication", "NSDragging", "NSDraggingItem", "NSDraggingSession", "NSEvent", "NSGraphics", "NSGraphicsContext", "NSImage", "NSResponder", "NSView", "NSWindow", "objc2-core-foundation"] }
 libc = "0.2.190"
 
 [profile.release]

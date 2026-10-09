@@ -3,7 +3,6 @@
 
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import { startDrag } from '@crabnebula/tauri-plugin-drag'
 import { optimizePaths } from './optimize'
 import type { Unsubscribe, ViewerAPI } from './viewer/types'
 
@@ -50,7 +49,7 @@ export function installViewerBridge(): void {
       openUrl: (url) => invoke('open_external', { url }),
     },
     share: {
-      startDrag: (paths, icon) => startDrag({ item: paths, icon, mode: 'copy' }),
+      startDrag: (paths, icon) => invoke('start_drag', { paths, icon }),
       optimize:  (paths) => optimizePaths(paths),
       exportImage: (path, options) => invoke('export_image', { path, options }),
       exportSave:  (source, result) => invoke('export_save', { source, result }),

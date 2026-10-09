@@ -1,6 +1,7 @@
 mod capture;
 mod clipboard;
 mod commands;
+mod drag;
 mod export;
 mod favorites;
 mod formats;
@@ -29,8 +30,6 @@ pub fn run() {
         // Before everything else: Finder can hand over files before the app is fully set up.
         .manage(commands::OpenedFiles::default())
         .plugin(tauri_plugin_dialog::init())
-        // Drag thumbnails out of the window as real files.
-        .plugin(tauri_plugin_drag::init())
         // Reopens the window at its last size and place.
         .plugin(tauri_plugin_window_state::Builder::default().build())
         // Serves local files to the page as viewer-file://viewer/<absolute path>.
@@ -79,6 +78,7 @@ pub fn run() {
             commands::open_in_finder,
             commands::open_external,
             commands::copy_files,
+            commands::start_drag,
             commands::copy_paths,
             commands::capture_running_apps,
             commands::capture_permissions,
