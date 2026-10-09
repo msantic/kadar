@@ -11,6 +11,8 @@ mod optimize;
 mod protocol;
 mod recorder;
 mod taken;
+#[cfg(test)]
+mod testutil;
 mod thumbs;
 mod video;
 mod watch;

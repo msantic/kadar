@@ -95,3 +95,18 @@ fn is_online_only(path: &Path) -> bool {
     std::fs::metadata(path).is_ok_and(|m| m.st_flags() & SF_DATALESS != 0)
 }
 
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn files_without_camera_data_are_none_and_cached() {
+        let dir = crate::testutil::temp_dir("taken");
+        let img = dir.join("plain.png");
+        crate::testutil::write_png(&img, 20, 20);
+        let cache = dir.join("cache.json");
+        let stamp = || vec![super::FileStamp { path: img.to_string_lossy().into_owned(), mtime_ms: 1.0 }];
+        let dates = super::TakenDates::load(cache.clone());
+        assert_eq!(dates.get(stamp()), vec![None]);
+        assert!(cache.is_file(), "results are kept for the next start");
+        assert_eq!(super::TakenDates::load(cache).get(stamp()), vec![None]);
+    }
+}

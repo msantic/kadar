@@ -246,5 +246,21 @@ mod tests {
         assert_eq!(out_path(Path::new("/a/My Photo.JPG"), "webp"), Path::new("/a/optimized/my-photo.webp"));
         assert_eq!(out_path(Path::new("/a/Šuma čađa.png"), "jpg"), Path::new("/a/optimized/suma-cada.jpg"));
     }
-}
 
+    #[test]
+    fn optimizes_into_the_optimized_folder_and_skips_its_own_results() {
+        let dir = crate::testutil::temp_dir("optimize");
+        let src = dir.join("Big Photo.png");
+        crate::testutil::write_png(&src, 900, 600);
+        let opts = Options { max_width: 300, image_format: ImageFormat::Webp, video_preset: crate::video::Preset::P720 };
+        let dest = out_path(&src, "webp");
+        optimize_image(&src, &dest, &opts).unwrap();
+        assert_eq!(dest, dir.join("optimized/big-photo.webp"));
+        assert_eq!(crate::macos::image_size(&dest), Some((300, 200)));
+
+        std::fs::write(dir.join(".hidden.png"), b"x").unwrap();
+        std::fs::write(dir.join("readme.txt"), b"x").unwrap();
+        let found = expand(&[dir.to_string_lossy().into_owned()]);
+        assert_eq!(found, [src.to_string_lossy().into_owned()], "no results, hidden or unknown files");
+    }
+}

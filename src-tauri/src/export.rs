@@ -204,5 +204,45 @@ mod tests {
         assert_eq!(unrotate(0.0, 0.0, 100.0, 50.0, 2, 400.0, 300.0), (300.0, 250.0, 100.0, 50.0));
         assert_eq!(unrotate(0.0, 0.0, 100.0, 50.0, 3, 400.0, 300.0), (350.0, 0.0, 50.0, 100.0));
     }
-}
 
+    fn opts(turns: u8, crop: Option<super::Crop>, max_width: Option<u32>, format: crate::optimize::ImageFormat) -> super::ExportOptions {
+        super::ExportOptions { turns, crop, max_width, format, quality: 80 }
+    }
+
+    #[test]
+    fn export_rotates_crops_and_scales() {
+        use crate::optimize::ImageFormat::{Jpg, Png, Webp};
+        let dir = crate::testutil::temp_dir("export");
+        let src = dir.join("photo.png");
+        crate::testutil::write_png(&src, 400, 300);
+        let src = src.to_string_lossy().into_owned();
+        let out = dir.join("out");
+
+        let r = super::export(&src, &opts(0, None, None, Png), &out).unwrap();
+        assert_eq!((r.width, r.height), (400, 300));
+        let r = super::export(&src, &opts(1, None, None, Webp), &out).unwrap();
+        assert_eq!((r.width, r.height), (300, 400), "a quarter turn swaps width and height");
+        let half = Some(super::Crop { x: 0.25, y: 0.0, w: 0.5, h: 0.5 });
+        let r = super::export(&src, &opts(0, half, None, Jpg), &out).unwrap();
+        assert_eq!((r.width, r.height), (200, 150));
+        let r = super::export(&src, &opts(0, None, Some(100), Webp), &out).unwrap();
+        assert_eq!((r.width, r.height), (100, 75), "scales down to the width, keeping the shape");
+        let r = super::export(&src, &opts(0, None, Some(4000), Webp), &out).unwrap();
+        assert_eq!(r.width, 400, "never scales up");
+        assert!(std::path::Path::new(&r.path).is_file());
+        assert_eq!(std::fs::metadata(&r.path).unwrap().len(), r.bytes);
+    }
+
+    #[test]
+    fn saving_never_overwrites() {
+        let dir = crate::testutil::temp_dir("export-save");
+        let src = dir.join("photo.png");
+        crate::testutil::write_png(&src, 50, 40);
+        let result = dir.join("photo.webp");
+        std::fs::write(&result, b"data").unwrap();
+        let a = super::save_next_to(&src.to_string_lossy(), &result.to_string_lossy()).unwrap();
+        let b = super::save_next_to(&src.to_string_lossy(), &result.to_string_lossy()).unwrap();
+        assert!(a.ends_with("optimized/photo.webp"));
+        assert!(b.ends_with("optimized/photo-2.webp"));
+    }
+}

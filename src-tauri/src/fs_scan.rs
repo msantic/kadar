@@ -166,5 +166,19 @@ mod tests {
         assert_eq!(natural_cmp("IMG_0010", "img_9"), Ordering::Greater);
         assert_eq!(natural_cmp("Apple", "banana"), Ordering::Less);
     }
-}
 
+    #[test]
+    fn listing_skips_hidden_and_unknown_and_sorts_like_finder() {
+        let dir = crate::testutil::temp_dir("listing");
+        for name in ["img10.jpg", "img2.jpg", "B.png", ".hidden.jpg", "notes.txt", "clip.MOV"] {
+            std::fs::write(dir.join(name), b"x").unwrap();
+        }
+        std::fs::create_dir(dir.join("sub")).unwrap();
+        let l = super::list_folder(&dir.to_string_lossy());
+        let names: Vec<&str> = l.files.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(names, ["B.png", "clip.MOV", "img2.jpg", "img10.jpg"]);
+        assert_eq!(l.folders.len(), 1);
+        assert_eq!(l.files[1].kind, crate::formats::Kind::Video);
+        assert!(!l.truncated);
+    }
+}

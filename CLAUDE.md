@@ -14,7 +14,8 @@ Read README.md first: it has what Kadar does and which file does what. This file
 - `npm run dev` — run with live reload. `npm run build` — signed `.app` and `.dmg` in `src-tauri/target/release/bundle/`.
 - Rust tools are in `~/.cargo/bin`, which is not on the agent shell PATH. The npm scripts add it. For cargo directly, call `~/.cargo/bin/cargo` (run it in `src-tauri/`).
 - Kadar is installed in /Applications. To update it: `npm run build`, then `ditto src-tauri/target/release/bundle/macos/Kadar.app /Applications/Kadar.app` (quit Kadar first). Finder's "Open With" uses that copy.
-- `npx tsc` checks the window code. `~/.cargo/bin/cargo test` and `cargo build` must stay free of warnings.
+- `npm run check` runs all checks: types, the window checks (`src/**/*.test.ts`, vitest) and the Rust checks (`cargo test`). `npm run build` runs them first and stops on a failure. Add a check with every new behavior. `cargo build` must stay free of warnings.
+- Rust checks make their own folders and images (`testutil.rs`); never point a check at the owner's files.
 
 ## How the parts connect
 

@@ -336,3 +336,25 @@ pub fn copy_files(app: AppHandle, paths: Vec<String>) -> Result<(), String> {
 pub fn copy_paths(app: AppHandle, paths: Vec<String>) -> Result<(), String> {
     clipboard::copy_paths(&app, paths)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::rename_file;
+
+    #[test]
+    fn rename_rules() {
+        let dir = crate::testutil::temp_dir("rename");
+        let a = dir.join("a.jpg");
+        std::fs::write(&a, b"a").unwrap();
+        std::fs::write(dir.join("taken.jpg"), b"t").unwrap();
+        let a = a.to_string_lossy().into_owned();
+
+        assert!(rename_file(a.clone(), "x/y.jpg".into()).is_err(), "no slash");
+        assert!(rename_file(a.clone(), "  ".into()).is_err(), "no empty name");
+        assert!(rename_file(a.clone(), "taken.jpg".into()).is_err(), "never replaces another file");
+        let b = rename_file(a.clone(), " b.jpg ".into()).unwrap();
+        assert!(b.ends_with("/b.jpg") && std::path::Path::new(&b).is_file());
+        let upper = rename_file(b, "B.jpg".into()).unwrap();
+        assert!(upper.ends_with("/B.jpg"), "a change of case only is allowed");
+    }
+}

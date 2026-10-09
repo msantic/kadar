@@ -5,15 +5,17 @@
   "description": "Kadar — fast image viewer, image/video optimizer, screenshot and screen recorder for macOS",
   "scripts": {
     "dev": "scripts/build-ffmpeg.sh && PATH=\"$HOME/.cargo/bin:$PATH\" tauri dev",
-    "build": "scripts/build-ffmpeg.sh && PATH=\"$HOME/.cargo/bin:$PATH\" tauri build",
-    "typecheck": "tsc"
+    "build": "scripts/build-ffmpeg.sh && npm run check && PATH=\"$HOME/.cargo/bin:$PATH\" tauri build",
+    "check": "tsc && vitest run && cd src-tauri && PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --quiet"
   },
   "devDependencies": {
     "@crabnebula/tauri-plugin-drag": "^2.1.0",
     "@tauri-apps/api": "^2.12.1",
     "@tauri-apps/cli": "^2.12.1",
     "@types/node": "^25.3.0",
+    "jsdom": "^26.1.0",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vitest": "^3.2.7"
   }
 }
