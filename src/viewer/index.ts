@@ -179,6 +179,24 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     localStorage.setItem('persist:viewer-thumb-size', String(val))
   })
 
+  // Pinch on the trackpad (or ⌘-scroll) in the grid changes the thumbnail size, as in Photos.
+  // The Mac sends a pinch as a scroll with Control held. One layout per frame at most.
+  let pinchSize: number | null = null
+  grid.root.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey && !e.metaKey) return
+    e.preventDefault()
+    const from = pinchSize ?? Number(sizeSlider.value)
+    const firstInFrame = pinchSize === null
+    pinchSize = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, from * Math.exp(-e.deltaY * 0.01)))
+    if (!firstInFrame) return
+    requestAnimationFrame(() => {
+      if (pinchSize === null) return
+      sizeSlider.value = String(Math.round(pinchSize))
+      pinchSize = null
+      sizeSlider.dispatchEvent(new Event('input'))
+    })
+  }, { passive: false })
+
   main.append(toolbar, grid.root)
   layout.append(sidebar, main)
   panel.append(layout, lightbox.root, createExport())

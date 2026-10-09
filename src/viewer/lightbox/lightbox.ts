@@ -165,17 +165,37 @@ export function createLightbox(): LightboxHandle {
   }
 
   // Pinch arrives as a wheel event with ctrlKey. ⌘-scroll zooms too; plain scrolling moves.
+  // Two-finger swipe left or right on a fitted image goes to the next or previous one, as in
+  // Photos. One swipe = one step: after a step, the rest of the motion (and the trackpad's
+  // momentum) is ignored until the fingers have rested for a moment.
+  const SWIPE_DISTANCE = 60
+  const SWIPE_REST_MS = 220
+  let swipeSum = 0
+  let swipeLocked = false
+  let swipeTimer: ReturnType<typeof setTimeout> | null = null
+  function swipe(e: WheelEvent): void {
+    if (swipeTimer !== null) clearTimeout(swipeTimer)
+    swipeTimer = setTimeout(() => { swipeSum = 0; swipeLocked = false }, SWIPE_REST_MS)
+    if (swipeLocked || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return
+    swipeSum += e.deltaX
+    if (Math.abs(swipeSum) < SWIPE_DISTANCE) return
+    swipeLocked = true
+    step(swipeSum > 0 ? 1 : -1)
+  }
+
   stage.addEventListener('wheel', (e) => {
-    if (img.hidden) return
     e.preventDefault()
     if (e.ctrlKey || e.metaKey) {
+      if (img.hidden) return
       const p = stagePoint(e)
       zoomAt(scale * Math.exp(-e.deltaY * 0.01), p.x, p.y)
-    } else if (!fitted) {
+    } else if (!img.hidden && !fitted) {
       tx -= e.deltaX
       ty -= e.deltaY
       clampPan()
       apply()
+    } else {
+      swipe(e)
     }
   }, { passive: false })
 
