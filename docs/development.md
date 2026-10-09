@@ -147,6 +147,13 @@ Raise `version` in `tauri.conf.json` before you share a new build, so people can
 | Recording a 5K screen fails | H.264 cannot encode that size. The recorder uses HEVC for the capture file. |
 | Recording finish fails on silent audio | loudnorm cannot handle a silent track. The finish step retries without it. |
 
+## Windows and Linux builds
+
+Windows and Linux builds run on the BIMTLY office server, not on the Mac. Who owns what, how to
+reach the machines, and the rules for using them are in the Roadmap's "Build machines" part in
+README.md and in `CLAUDE.md`. The server's own runbook is
+`~/dev/bimtly/devops/conf/office/vm/README.md`.
+
 ## Measure speed
 
 - Measure with a release build: `PATH="$HOME/.cargo/bin:$PATH" npx tauri dev --release`. The

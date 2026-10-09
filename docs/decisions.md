@@ -51,6 +51,14 @@ the page. The viewer uses a small store, an event bus and plain DOM code.
 "Kadar" means a film frame or a shot. It fits a viewer, a recorder and a screenshot tool. The
 GitHub project was renamed to match. The app id is `com.msantic.kadar`.
 
+### Windows and Linux builds on the BIMTLY office server (2026-10-09)
+
+A Mac cannot build for Windows or Linux. The BIMTLY office server already has a Windows 11 build
+machine (`winbuild`), made for the BIMTLY Showroom, with every tool Kadar needs except Rust. Kadar
+uses it, driven from the Mac over SSH, instead of paid build services. Linux gets its own small
+virtual machine on the same server. The server's runbook in the `bimtly` repo is the source of
+truth for how the machines work.
+
 ## Video
 
 ### A small self-built ffmpeg for video, not Apple's encoders (2026-10-08)
