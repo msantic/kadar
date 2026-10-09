@@ -1,4 +1,5 @@
-// The sidebar's Locations: a folder tree under Home, Pictures, Desktop, Downloads and Movies.
+// The sidebar's Locations: a folder tree under Home, Pictures, Desktop, Downloads and Movies
+// (Videos on Windows and Linux).
 // Subfolders load from Rust when a folder first opens. Open folders are kept in the session;
 // the folder shown in the grid is marked.
 
@@ -7,6 +8,7 @@ import { emit } from '../bus'
 import { getState, subscribe } from '../store'
 import { getSession, updateSession } from '../session'
 import type { FolderEntry } from '../types'
+import { words } from '../../platform'
 
 interface Node {
   entry: FolderEntry
@@ -35,7 +37,7 @@ export function createTree(): HTMLElement {
       { name: 'Pictures',  path: roots.pictures },
       { name: 'Desktop',   path: roots.desktop },
       { name: 'Downloads', path: roots.downloads },
-      { name: 'Movies',    path: roots.movies },
+      { name: words.videos, path: roots.movies },
     ]
     const nodes = items.map((item) => makeNode(item, 0))
     for (const node of nodes) root.appendChild(node.el)

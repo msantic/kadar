@@ -17,6 +17,7 @@ installed. Windows and Linux are planned: see [Roadmap](#roadmap-windows-and-lin
 | [Architecture](docs/architecture.md) | How the Rust side and the window fit together; data on disk; speed design. |
 | [Development](docs/development.md) | Setup, checks, build, install, signing, ffmpeg, known traps, speed measuring. |
 | [Decisions](docs/decisions.md) | Lasting choices and why they were made. |
+| [Windows](docs/windows.md) | The Windows build machine, the scripts, the remote screen through the tunnel, what differs on Windows. |
 
 Every code file starts with a comment that says what it is for, and every public function has a
 doc comment. `npm run check` fails when one is missing.
@@ -45,7 +46,7 @@ Tauri 2: a Rust program (`src-tauri/`) and the window content as plain TypeScrip
 | Record | `platform/macos/recorder.rs` | ScreenCaptureKit records to a file; small ffmpeg mixes audio and makes the MP4 |
 | Screenshot | `platform/macos/capture.rs` | Window list from CoreGraphics; system `screencapture` tool |
 
-All code that calls the operating system lives in `src-tauri/src/platform/`, one folder per system (`platform/macos/` today). The window asks `src/platform.ts` for the command key and the system's words.
+All code that calls the operating system lives in `src-tauri/src/platform/`, one folder per system (`platform/macos/`, `platform/windows/`). The window asks `src/platform.ts` for the command key and the system's words.
 
 **Small ffmpeg.** `scripts/build-ffmpeg.sh` builds an 8 MB ffmpeg with only H.264 (x264), AAC and the needed readers and filters. The Mac's own H.264/HEVC encoders were tested and gave visibly worse video at the same file size. x264 is GPL, so this ffmpeg is GPL.
 
@@ -115,7 +116,9 @@ Screenshot, Record and Linux come after it. Code written for the first step must
 1. **Prepare on the Mac.** Done 2026-10-09: all Mac calls are behind `src-tauri/src/platform/macos/`,
    the Mac crates build only for macOS, and the window asks `src/platform.ts` for keys and words.
 2. **Build machines.** Builds and checks run on macOS, Windows and Linux for every change.
-3. **Windows: Viewer, Optimize, Export for Web.** (The first step.)
+3. **Windows: Viewer, Optimize, Export for Web.** (The first step.) Started 2026-10-09: Kadar
+   builds and runs on Windows; the Viewer, image optimizing and Export for Web work. Left: the
+   Windows video tool, drag-out, an installer. Steps and the remote screen: [docs/windows.md](docs/windows.md).
 4. **Windows installer and signing.**
 5. **Linux: Viewer, Optimize, Export for Web.**
 6. **Screenshot** on Windows, then Linux.

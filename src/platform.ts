@@ -50,6 +50,8 @@ export interface Words {
   showInFileManager: string
   /** "Trash" or "Recycle Bin". */
   trash: string
+  /** The home's video folder: "Movies" on the Mac, "Videos" elsewhere. */
+  videos: string
 }
 
 /** The words for a system. */
@@ -59,6 +61,7 @@ export function wordsFor(sys: System): Words {
     fileManager,
     showInFileManager: `Show in ${fileManager}`,
     trash: sys === 'windows' ? 'Recycle Bin' : 'Trash',
+    videos: sys === 'mac' ? 'Movies' : 'Videos',
   }
 }
 

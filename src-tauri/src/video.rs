@@ -45,14 +45,16 @@ impl Preset {
 
 /// The tool sits next to the app's own program file, in the app bundle and in dev builds.
 fn ffmpeg_path() -> PathBuf {
+    let name = format!("ffmpeg{}", std::env::consts::EXE_SUFFIX);
     // Checks run from a build folder with no tool next to them: use the built one directly.
     if cfg!(test) {
-        return PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bin").join("ffmpeg-aarch64-apple-darwin");
+        let built = if cfg!(target_os = "windows") { "ffmpeg-x86_64-pc-windows-msvc.exe" } else { "ffmpeg-aarch64-apple-darwin" };
+        return PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bin").join(built);
     }
     std::env::current_exe()
         .ok()
-        .and_then(|p| p.parent().map(|d| d.join("ffmpeg")))
-        .unwrap_or_else(|| PathBuf::from("ffmpeg"))
+        .and_then(|p| p.parent().map(|d| d.join(&name)))
+        .unwrap_or_else(|| PathBuf::from(name))
 }
 
 /// Makes a web MP4 of `src` at `dest` (H.264 quality 23, AAC 128 kb/s). Blocks until done;
@@ -136,6 +138,7 @@ pub fn encode(src: &Path, dest: &Path, args: &[&OsStr], progress: &dyn Fn(u32)) 
     }
 }
 
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))] // used by the Mac recorder
 /// Number of audio tracks in `path`, read from the tool's description of the file.
 pub fn audio_track_count(path: &Path) -> usize {
     let Ok(out) = Command::new(ffmpeg_path()).args(["-hide_banner", "-nostdin", "-i"]).arg(path).output() else {
@@ -187,6 +190,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_os = "windows", ignore = "the Windows ffmpeg is not built yet (Roadmap)")]
     fn compresses_a_clip_to_mp4() {
         let dir = crate::testutil::temp_dir("video-compress");
         let dest = dir.join("out").join("clip.mp4");
@@ -204,6 +208,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(target_os = "windows", ignore = "the Windows ffmpeg is not built yet (Roadmap)")]
     fn a_failed_run_leaves_no_file_and_says_why() {
         let dir = crate::testutil::temp_dir("video-fail");
         let src = dir.join("broken.mov");

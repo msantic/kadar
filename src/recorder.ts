@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { doResize, el, getSaveDir, hide, persist, setupPresetChange, setupSaveDir, show } from './shared'
+import { baseName } from './paths'
 
 const WHOLE_SCREEN = '__screen__'
 const SETTINGS_URL = 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
@@ -179,7 +180,7 @@ async function stop(): Promise<void> {
   stopBtn.disabled = true
   try {
     const path = await invoke<string>('record_stop')
-    el('result-path').textContent = path.split('/').pop() ?? path
+    el('result-path').textContent = baseName(path)
     el<HTMLButtonElement>('show-result-btn').dataset['path'] = path
     show('record-result')
   } catch (err) {

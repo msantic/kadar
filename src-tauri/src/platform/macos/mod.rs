@@ -13,3 +13,6 @@ pub mod image;
 pub mod recorder;
 /// Trash, Finder, the default app, cloud files and processor cores.
 pub mod system;
+
+/// Everything works on the Mac.
+pub const FEATURES: crate::platform::Features = crate::platform::Features { system: "mac", screenshot: true, record: true };

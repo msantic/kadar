@@ -29,7 +29,7 @@ pub fn handle<R: Runtime>(
     request: Request<Vec<u8>>,
     responder: UriSchemeResponder,
 ) {
-    let path = percent_decode(request.uri().path());
+    let path = file_path(&percent_decode(request.uri().path()));
     // Copies live in the thumbnail cache, so its size limit covers them too.
     let preview_dir = ctx.app_handle().path().app_data_dir().ok().map(|d| d.join("thumb-cache").join("pv"));
     let range = request
@@ -133,6 +133,17 @@ fn parse_range(value: &str, len: u64) -> Option<(u64, u64)> {
     (start <= end && start < len).then_some((start, end))
 }
 
+/// The file path from the URL path. A Windows path travels as "/C:/photos/a.jpg" (the window
+/// cannot start a URL path with "C:"); the leading "/" goes. Mac and Linux paths stay as they are.
+fn file_path(url_path: &str) -> String {
+    let b = url_path.as_bytes();
+    if b.len() >= 3 && b[0] == b'/' && b[1].is_ascii_alphabetic() && b[2] == b':' {
+        url_path[1..].to_string()
+    } else {
+        url_path.to_string()
+    }
+}
+
 fn percent_decode(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
@@ -222,6 +233,8 @@ mod tests {
     fn decode() {
         assert_eq!(percent_decode("/Users/a%20b/%C5%A1.jpg"), "/Users/a b/š.jpg");
         assert_eq!(percent_decode("/x%2"), "/x%2");
+        assert_eq!(file_path(&percent_decode("/C%3A/photos/a.jpg")), "C:/photos/a.jpg");
+        assert_eq!(file_path("/Users/me/a.jpg"), "/Users/me/a.jpg");
     }
 }
 

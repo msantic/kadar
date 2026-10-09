@@ -6,6 +6,7 @@ import { emit } from './bus'
 import { getState, setState } from './store'
 import { updateSession } from './session'
 import { words } from '../platform'
+import { joinPath, parentOf } from '../paths'
 
 function commit(selection: Set<string>, focus: string | null, anchor: string | null): void {
   setState({ selection, selectedPath: focus, anchorPath: anchor })
@@ -146,7 +147,7 @@ export async function optimizeSelection(): Promise<void> {
     const n = await window.viewer.share.optimize(paths)
     // Results land in an "optimized" folder next to the files.
     const first = paths[0]!
-    const folder = `${first.slice(0, first.lastIndexOf('/'))}/optimized`
+    const folder = joinPath(parentOf(first) ?? first, 'optimized')
     emit('toast', {
       text: `Optimized ${plural(n, 'file', 'files')} → "optimized" folder`,
       action: { label: words.showInFileManager, run: () => void window.viewer.fs.openDefault(folder) },

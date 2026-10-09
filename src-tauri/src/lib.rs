@@ -8,6 +8,7 @@ mod export;
 mod favorites;
 mod formats;
 mod fs_scan;
+#[cfg(target_os = "macos")]
 mod menu;
 mod optimize;
 mod platform;
@@ -24,12 +25,21 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
+use tauri::{AppHandle, Manager, WindowEvent};
+#[cfg(target_os = "macos")]
+use tauri::{Emitter, RunEvent};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
 /// Builds and runs the app; returns only when Kadar quits. Panics if Tauri fails to start.
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // Only the Mac has a menu bar: every Mac app has one at the top of the screen. On Windows and
+    // Linux the window maps the same keys itself (src/shortcuts.ts) and keeps its own look.
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .menu(menu::build)
+        .on_menu_event(|app, event| menu::forward(app, event.id().as_ref()));
+    builder
         // Before everything else: Finder can hand over files before the app is fully set up.
         .manage(commands::OpenedFiles::default())
         .plugin(tauri_plugin_dialog::init())
@@ -37,9 +47,20 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         // Serves local files to the page as viewer-file://viewer/<absolute path>.
         .register_asynchronous_uri_scheme_protocol("viewer-file", protocol::handle)
-        .menu(menu::build)
-        .on_menu_event(|app, event| menu::forward(app, event.id().as_ref()))
         .setup(|app| {
+            // Windows and Linux hand files to open as start arguments ("Open with Kadar").
+            #[cfg(not(target_os = "macos"))]
+            {
+                let paths: Vec<String> = std::env::args().skip(1).filter(|a| std::path::Path::new(a).exists()).collect();
+                if let Some(opened) = app.try_state::<commands::OpenedFiles>() {
+                    crate::sync::lock(&opened.0).extend(paths);
+                }
+            }
+            // A dark title bar on Windows, to match Kadar's dark window.
+            #[cfg(target_os = "windows")]
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_theme(Some(tauri::Theme::Dark));
+            }
             let data_dir = app.path().app_data_dir()?;
             app.manage(thumbs::ThumbService::start(
                 app.handle().clone(),
@@ -57,6 +78,7 @@ pub fn run() {
             commands::list_folder,
             commands::list_tree_children,
             commands::get_roots,
+            commands::platform_features,
             commands::choose_folder,
             commands::reveal_in_finder,
             commands::trash_files,
@@ -102,6 +124,9 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("Kadar failed to start")
         .run(|app, event| {
+            // Only the Mac sends opened files as an event; other systems pass them at start.
+            #[cfg(not(target_os = "macos"))]
+            let _ = (app, event);
             // Files opened from Finder ("Open With", double-click, drop on the Dock icon). They
             // wait in a queue: at launch the window is not ready yet and takes them when it is.
             #[cfg(target_os = "macos")]

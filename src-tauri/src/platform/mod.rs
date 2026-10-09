@@ -7,11 +7,13 @@
 //!
 //! What each module must offer:
 //! - `image`: decode at a size, thumbnails, video frames and length, image size, camera date,
-//!   all header details as JSON, PNG bytes for the clipboard, crop, and drawing a turned and
-//!   scaled part (`draw_turned`). Results are `Rgba` pixels or the system's own `Frame`.
+//!   all header details as JSON, PNG bytes for the clipboard, and drawing a turned and scaled
+//!   part (`draw_turned`). Results are `Rgba` pixels or the system's own `Frame`. (A system's
+//!   own capture code may use more helpers from its `image`; they are not shared.)
 //! - `system`: Trash, show in the file manager, open in the default app, open a web link,
-//!   "is this a cloud file not on disk yet", the number of fast processor cores, and the names
-//!   the system gives its file manager and trash (`FILE_MANAGER`, `TRASH`) for the menus.
+//!   "is this a cloud file not on disk yet", and the number of fast processor cores. The Mac's
+//!   also names Finder and the Trash for its menu bar (`FILE_MANAGER`, `TRASH`); other systems
+//!   have no menu bar, and the window takes its words from `src/platform.ts`.
 //! - `clipboard`: copy files (plus a picture for one image), paths, or text.
 //! - `drag`: drag files out of the window into other apps, Copy only.
 //! - `capture`: the app list, screen access, resize another app's window, a window screenshot.
@@ -20,10 +22,40 @@
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
-pub use macos::{capture, clipboard, drag, image, recorder, system};
+pub use macos::{capture, clipboard, drag, image, recorder, system, FEATURES};
+
+#[cfg(target_os = "windows")]
+mod windows;
+#[cfg(target_os = "windows")]
+pub use windows::{capture, clipboard, drag, image, recorder, system, FEATURES};
+
+/// What this system's build can do, for the window: tabs that are not ready yet stay hidden.
+#[derive(serde::Serialize, Clone, Copy)]
+pub struct Features {
+    /// "mac", "windows" or "linux".
+    pub system: &'static str,
+    /// The Screenshot tab works.
+    pub screenshot: bool,
+    /// The Record tab works.
+    pub record: bool,
+}
+
+/// "~/Pictures" → the full path inside the home folder (HOME, or USERPROFILE on Windows).
+/// Screenshots and recordings use it for their save folder; other paths stay as they are.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))] // Windows capture comes later
+pub fn expand_home(dir: &str) -> std::path::PathBuf {
+    match dir.strip_prefix('~') {
+        Some(rest) => {
+            let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).unwrap_or_default();
+            std::path::PathBuf::from(home).join(rest.trim_start_matches(['/', '\\']))
+        }
+        None => std::path::PathBuf::from(dir),
+    }
+}
 
 /// Pixels in sRGB, 8 bits per channel, RGBA with straight (not premultiplied) alpha. The shared
 /// encoders (WebP, JPG, PNG) take this, whichever system decoded the image.
+#[derive(Clone)]
 pub struct Rgba {
     pub width: u32,
     pub height: u32,
@@ -61,5 +93,12 @@ mod tests {
         assert_eq!(&px[8..], [0, 0, 0, 0], "fully clear stays clear");
         let mut solid = [1, 2, 3, 255];
         assert!(super::unpremultiply(&mut solid));
+    }
+
+    #[test]
+    fn save_folders_expand_the_home_sign() {
+        let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).unwrap();
+        assert_eq!(super::expand_home("~/Pictures"), std::path::Path::new(&home).join("Pictures"));
+        assert_eq!(super::expand_home("/tmp/x"), std::path::Path::new("/tmp/x"));
     }
 }

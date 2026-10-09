@@ -64,7 +64,7 @@ may block. Commands without `(async)` run on the main thread; keep them quick (`
 ## 2. Rust modules
 
 All code that calls the operating system lives in `src/platform/`, one folder per system
-(`platform/macos/` today; Windows and Linux follow the Roadmap in README.md). `platform/mod.rs`
+(`platform/macos/`, `platform/windows/` since 2026-10-09; Linux follows the Roadmap in README.md; Windows details in [windows.md](windows.md)). `platform/mod.rs`
 lists what every system must offer and holds the shared pixel type `Rgba` and `unpremultiply`.
 The shared modules below call `platform::image`, `platform::system`, `platform::clipboard`,
 `platform::drag`, `platform::capture` and `platform::recorder`, never a system API directly. The
@@ -223,7 +223,7 @@ when asked. `capture_resize_window` moves and sizes the app's front window with 
   Builder, before `setup`, because macOS can send files during launch), emits `open-paths`, and
   focuses the window. The window listens first, then calls `take_opened` once at start, so no file
   is missed.
-- **Menu bar** (`menu.rs`): Kadar, File, Edit, View (with Sort By), Go, Window. A click emits
+- **Menu bar** (`menu.rs`, Mac only; Windows and Linux use `src/shortcuts.ts`): Kadar, File, Edit, View (with Sort By), Go, Window. A click emits
   `menu` with the item id; `main.ts` switches tabs for `tab:*` and forwards the rest to the viewer
   bus. From another tab, only commands that open or arrange the viewer run; commands on files
   only bring the Viewer to the front. While Export for Web is open, the viewer ignores menu
@@ -249,6 +249,8 @@ later caller. One bad image could stop all thumbnails until restart. The data un
 | `main.ts` | Installs the bridges; tab switching; lazy-loads Viewer, Record, Screenshot on first visit (Optimize is set up at once because the viewer's "Optimize" uses it); remembers the tab; routes `menu` events; takes files opened from Finder; shows unhandled promise errors as a toast |
 | `bridge.ts` | `window.viewer` (typed `ViewerAPI` in `viewer/types.ts`) and `window.optimizer` (Screenshot). Each method is one `invoke` or one `listen` |
 | `optimize.ts` | Optimize tab: drop events from the webview, queue list, `file-progress`; `optimizePaths()` for the viewer |
+| `shortcuts.ts` | Windows and Linux only: maps keys to the Mac menu bar's command names (Ctrl keys, Delete, F2, Alt+arrows) and stops the browser engine's own keys; `main.ts` runs them when no other code took the key |
+| `paths.ts` | Path helpers for `/` and `\` paths (base name, parent, join, path bar parts) |
 | `platform.ts` | The system the window runs on: command key (⌘ / Ctrl), key labels for tips, words (Finder / File Explorer / Files, Trash / Recycle Bin); `data-word` elements in `index.html` are filled at start | 
 | `recorder.ts` | Record tab: targets, mics, 3-2-1 countdown with Dock badge, start/stop, `record-*` events |
 | `screenshot.ts`, `shared.ts` | Screenshot tab; shared helpers for Record and Screenshot (presets, resize, save folder, `persist()` of form fields) |

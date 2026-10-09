@@ -21,6 +21,7 @@ import { createLightbox } from './lightbox/lightbox'
 import { ZOOM_MIN, ZOOM_MAX, ZOOM_DEFAULT } from './grid/grid-layout'
 import { readStored, writeStored } from '../storage'
 import { commandKey } from '../platform'
+import { crumbs, parentOf } from '../paths'
 
 let initialized = false
 
@@ -59,14 +60,12 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
   pathEl.className = 'viewer-path'
   pathEl.textContent = 'No folder selected'
   function drawPath(dir: string): void {
-    const parts = dir.split('/').filter(Boolean)
     const nodes: Node[] = []
-    parts.forEach((name, i) => {
+    crumbs(dir).forEach(({ name, path: target }, i) => {
       if (i > 0) nodes.push(Object.assign(document.createElement('span'), { className: 'viewer-path-sep', textContent: '›' }))
       const btn = document.createElement('button')
       btn.className = 'viewer-path-part'
       btn.textContent = name
-      const target = `/${parts.slice(0, i + 1).join('/')}`
       btn.title = target
       btn.addEventListener('click', () => emit('folder:request', { path: target }))
       nodes.push(btn)
@@ -238,8 +237,8 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     const current = getState().currentFolder
     if (!current) return
     if (to === 'up') {
-      const parent = current.slice(0, current.lastIndexOf('/')) || '/'
-      if (parent === current) return
+      const parent = parentOf(current)
+      if (!parent || parent === current) return
       backStack.push(current)
       forwardStack.length = 0
       void openFolder(parent, current)
@@ -279,7 +278,7 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
       emit('folder:request', { path: first.path })
       return
     }
-    const folder = first.path.slice(0, first.path.lastIndexOf('/')) || '/'
+    const folder = parentOf(first.path) ?? first.path
     if (getState().currentFolder !== folder) {
       updateSession({ folder, topPath: null, topIndex: 0, selectedPath: null, selectedPaths: [], anchorPath: null, bigView: false, filter: '' })
       filterInput.value = ''

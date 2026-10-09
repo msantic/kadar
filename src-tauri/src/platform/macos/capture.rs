@@ -2,7 +2,7 @@
 //! Windows come from the Mac's window list; the picture comes from the system `screencapture`
 //! tool, which macOS counts as Kadar for the Screen Recording permission.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -91,15 +91,6 @@ pub fn permissions() -> Permissions {
     Permissions { screen }
 }
 
-/// "~/Pictures" → the full path inside the home folder. Screenshots and recordings use it for
-/// their save folder; other paths stay as they are.
-pub(crate) fn expand_home(dir: &str) -> PathBuf {
-    match dir.strip_prefix('~') {
-        Some(rest) => PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(rest.trim_start_matches('/')),
-        None => PathBuf::from(dir),
-    }
-}
-
 fn applescript_text(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }
@@ -163,7 +154,7 @@ pub fn take(opts: &ShotOptions) -> Result<String, String> {
     let window = largest_window(&opts.app_name)
         .ok_or_else(|| format!("No open window found for \"{}\". Make sure the app is open and visible.", opts.app_name))?;
 
-    let dir = expand_home(&opts.output_dir);
+    let dir = crate::platform::expand_home(&opts.output_dir);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
     let out = dir.join(format!("screenshot-{stamp}"));
@@ -231,10 +222,4 @@ mod tests {
         assert_eq!(super::applescript_text(r#"My "App" \ 2"#), r#"My \"App\" \\ 2"#);
     }
 
-    #[test]
-    fn save_folders_expand_the_home_sign() {
-        let home = std::env::var("HOME").unwrap();
-        assert_eq!(super::expand_home("~/Pictures"), std::path::Path::new(&home).join("Pictures"));
-        assert_eq!(super::expand_home("/tmp/x"), std::path::Path::new("/tmp/x"));
-    }
 }

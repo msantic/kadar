@@ -691,3 +691,34 @@ In Finder, Kadar shows in **Open With** for these types: JPG, JPEG, PNG, HEIC, H
 | "Export for Web…" is gray in the right-click menu. | No image is selected. Export for Web does not use videos or folders. |
 | Export for Web shows "Kadar cannot read this image." | The file is damaged, or macOS cannot read its format. Open it in another app to check. |
 | "Something failed: …" | An unexpected error occurred. Try the action again. If it fails again, note the text and report it. |
+
+---
+
+## Kadar on Windows
+
+Kadar on Windows is new. The Viewer, Optimize (images) and Export for Web work. Video optimizing, dragging files out, Record and Screenshot come later.
+
+- Kadar on Windows has no menu bar. Use the keys below, or right-click a file.
+- Use **Ctrl** where this guide says **⌘**.
+- "Finder" is **File Explorer**, the "Trash" is the **Recycle Bin**, and "Movies" is **Videos**.
+- For HEIC photos and camera RAW files, Windows needs Microsoft's free **HEIF Image Extensions** and **Raw Image Extension** from the Microsoft Store.
+
+| Key | What it does |
+|---|---|
+| Ctrl+1, Ctrl+2 | Shows the Viewer or the Optimize tab. |
+| Ctrl+O | Opens the selected files in their default app. |
+| Ctrl+R | Shows the file in File Explorer. |
+| Ctrl+E | Opens Export for Web. |
+| Ctrl+Shift+O | Optimizes the selected files. |
+| Delete or Ctrl+Backspace | Moves the selected files to the Recycle Bin. |
+| F2 or Return | Renames the selected file. |
+| Ctrl+Z | Undoes the last move to the Recycle Bin or rename. |
+| Ctrl+C / Ctrl+Shift+C | Copies the files / their paths. |
+| Ctrl+A | Selects all files. |
+| Ctrl+F | Goes to the filter field. |
+| Ctrl+I | Shows or hides the info panel. |
+| Ctrl+= / Ctrl+- | Makes the tiles larger / smaller. |
+| Alt+← or Ctrl+[ | Goes back to the previous folder. |
+| Alt+→ or Ctrl+] | Goes forward. |
+| Alt+↑ or Ctrl+↑ | Opens the folder that contains the open folder. |
+

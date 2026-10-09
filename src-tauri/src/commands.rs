@@ -39,6 +39,12 @@ pub struct Roots {
     movies: String,
 }
 
+/// What this system's build can do (system name, Screenshot and Record tabs).
+#[tauri::command]
+pub fn platform_features() -> crate::platform::Features {
+    crate::platform::FEATURES
+}
+
 /// Home, Pictures, Desktop, Downloads and Movies as full paths.
 #[tauri::command]
 pub fn get_roots(app: AppHandle) -> Roots {
@@ -55,7 +61,7 @@ pub fn get_roots(app: AppHandle) -> Roots {
     }
 }
 
-/// Shows the Mac folder picker and waits. Returns the chosen path, or null when cancelled.
+/// Shows the system's folder picker and waits. Returns the chosen path, or null when cancelled.
 #[tauri::command(async)]
 pub fn choose_folder(app: AppHandle) -> Option<String> {
     app.dialog()
@@ -433,9 +439,9 @@ mod tests {
         assert!(rename_file(a.clone(), "  ".into()).is_err(), "no empty name");
         assert!(rename_file(a.clone(), "taken.jpg".into()).is_err(), "never replaces another file");
         let b = rename_file(a.clone(), " b.jpg ".into()).unwrap();
-        assert!(b.ends_with("/b.jpg") && std::path::Path::new(&b).is_file());
+        assert!(std::path::Path::new(&b).ends_with("b.jpg") && std::path::Path::new(&b).is_file());
         let upper = rename_file(b, "B.jpg".into()).unwrap();
-        assert!(upper.ends_with("/B.jpg"), "a change of case only is allowed");
+        assert!(std::path::Path::new(&upper).ends_with("B.jpg"), "a change of case only is allowed");
     }
 
     #[test]

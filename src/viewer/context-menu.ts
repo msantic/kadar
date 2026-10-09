@@ -8,7 +8,7 @@ import { getState } from './store'
 import {
   copySelection, exportSelection, openSelectionDefault, optimizeSelection, selectedImages, selectedPaths, trashSelection,
 } from './selection'
-import { words } from '../platform'
+import { system, words } from '../platform'
 
 /** Opens the menu at window point x, y (CSS px). Does nothing when no file is selected. */
 export async function showContextMenu(x: number, y: number): Promise<void> {
@@ -73,7 +73,7 @@ export async function showContextMenu(x: number, y: number): Promise<void> {
       await separator(),
       await MenuItem.new({
         text: `Move to ${words.trash}`,
-        accelerator: 'CmdOrCtrl+Backspace',
+        accelerator: system === 'mac' ? 'CmdOrCtrl+Backspace' : 'Delete',
         action: () => void trashSelection(),
       }),
     ],

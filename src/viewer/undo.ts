@@ -4,6 +4,7 @@ import { emit } from './bus'
 import { selectPath } from './selection'
 import { getState, setState } from './store'
 import { updateSession } from './session'
+import { baseName } from '../paths'
 
 /** One change that ⌘Z can reverse. */
 export type UndoStep =
@@ -19,7 +20,7 @@ export function pushUndo(step: UndoStep): void {
   if (steps.length > MAX_STEPS) steps.shift()
 }
 
-const name = (path: string): string => path.slice(path.lastIndexOf('/') + 1)
+const name = (path: string): string => baseName(path)
 
 /** Undoes the newest step and selects what came back. */
 export async function undoLast(): Promise<void> {

@@ -352,7 +352,8 @@ mod tests {
         std::fs::write(dir.join("b/optimized/old.webp"), b"x").unwrap();
         std::fs::write(dir.join("a.jpg"), b"x").unwrap();
         let s = |p: &str| dir.join(p).to_string_lossy().into_owned();
-        assert_eq!(expand(&[s("b"), s("a.jpg"), s("missing.jpg")]), [s("b/two.mov"), s("a.jpg")]);
+        let two = dir.join("b").join("two.mov").to_string_lossy().into_owned();
+        assert_eq!(expand(&[s("b"), s("a.jpg"), s("missing.jpg")]), [two, s("a.jpg")]);
         assert_eq!(out_path(Path::new("/a/★.png"), "webp"), Path::new("/a/optimized/file.webp"));
     }
 }

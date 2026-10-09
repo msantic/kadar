@@ -10,6 +10,7 @@ import { getState } from '../store'
 import type { BatchItem, ExportOptions, ExportResult } from '../types'
 import { formatBytes, savingPercent } from '../format'
 import { commandKey, keyLabel, words } from '../../platform'
+import { baseName, parentOf } from '../../paths'
 
 interface Rect { x: number; y: number; w: number; h: number }
 type Handle = 'move' | 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
@@ -342,7 +343,7 @@ export function createExport(): HTMLElement {
           pic.draggable = false
           tile.append(pic, el('figcaption', '', `${i.result.width} × ${i.result.height}  ·  ${formatBytes(i.result.bytes)}`))
         } else {
-          tile.append(el('figcaption', 'export-tile-error', `${i.source.split('/').pop()}: ${i.error ?? 'failed'}`))
+          tile.append(el('figcaption', 'export-tile-error', `${baseName(i.source)}: ${i.error ?? 'failed'}`))
         }
         return tile
       }))
@@ -474,7 +475,7 @@ export function createExport(): HTMLElement {
       if (pairs.length === 0) return
       try {
         const saved = await window.viewer.share.exportSaveMany(pairs)
-        const folder = saved[0]!.slice(0, saved[0]!.lastIndexOf('/'))
+        const folder = parentOf(saved[0]!) ?? saved[0]!
         emit('toast', {
           text: `Saved ${saved.length} files → "optimized" folder`,
           action: { label: words.showInFileManager, run: () => void window.viewer.fs.openDefault(folder) },
@@ -488,7 +489,7 @@ export function createExport(): HTMLElement {
     try {
       const saved = await window.viewer.share.exportSave(path, latest.path)
       emit('toast', {
-        text: `Saved → optimized/${saved.split('/').pop()}`,
+        text: `Saved → optimized/${baseName(saved)}`,
         action: { label: words.showInFileManager, run: () => void window.viewer.fs.revealInFinder(saved) },
       })
     } catch (err) {
@@ -554,7 +555,7 @@ export function createExport(): HTMLElement {
     latest = null
     split = 0.5
     qualityRow.hidden = format.value === 'png'
-    source.textContent = `${p.split('/').pop()}  ·  ${formatBytes(size)}`
+    source.textContent = `${baseName(p)}  ·  ${formatBytes(size)}`
     root.hidden = false
     exportOpen = true
     img.onload = () => { fullCrop(); setView('crop'); schedule() }

@@ -6,7 +6,8 @@ import { listen } from '@tauri-apps/api/event'
 import { installCaptureBridge, installViewerBridge } from './bridge'
 import type { OpenItem } from './viewer'
 import { initOptimize } from './optimize'
-import { applyWords } from './platform'
+import { applyWords, system } from './platform'
+import { commandForKey, isBrowserKey } from './shortcuts'
 
 installViewerBridge()
 installCaptureBridge()
@@ -92,9 +93,9 @@ function editText(id: string): boolean {
   return true
 }
 
-// Menu bar: tabs switch here; everything else is a viewer command, shown in the viewer.
-void listen<string>('menu', (e) => {
-  const id = e.payload
+/** Runs one command from the menu bar (Mac) or from a key (Windows, Linux): tabs switch here;
+ *  everything else is a viewer command, shown in the viewer. */
+function runCommand(id: string): void {
   if (id.startsWith('tab:')) { switchTab(id.slice(4)); return }
   if (EDIT_ITEMS.has(id)) {
     if (editText(id) || activeTab !== 'viewer') return
@@ -105,6 +106,34 @@ void listen<string>('menu', (e) => {
   switchTab('viewer')
   if (fromOtherTab && !SAFE_FROM_OTHER_TABS.test(id)) return
   void import('./viewer/bus').then(({ emit }) => emit('menu', { id }))
+}
+
+// The Mac menu bar sends its clicks and keys as "menu" events.
+void listen<string>('menu', (e) => runCommand(e.payload))
+
+// Windows and Linux have no menu bar: the window maps the same keys to the same commands. A key
+// that other code in the window takes (preventDefault) does not run twice. Keys that would make
+// the browser engine reload, search or go back are stopped first.
+if (system !== 'mac') {
+  window.addEventListener('keydown', (e) => {
+    if (isBrowserKey(e)) e.preventDefault()
+    const target = e.target as HTMLElement | null
+    const typing = !!target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)
+    const id = commandForKey(e, system, typing)
+    if (!id) return
+    const stoppedByUs = e.defaultPrevented
+    setTimeout(() => { if (stoppedByUs || !e.defaultPrevented) runCommand(id) }, 0)
+  }, { capture: true })
+}
+
+// Tabs that are not ready on this system yet (Screenshot and Record on Windows) stay hidden.
+void invoke<{ screenshot: boolean; record: boolean }>('platform_features').then((f) => {
+  const hide = (tab: string): void => {
+    document.querySelector<HTMLElement>(`.tab-btn[data-tab="${tab}"]`)?.setAttribute('hidden', '')
+    if (activeTab === tab) switchTab('viewer')
+  }
+  if (!f.screenshot) hide('screenshot')
+  if (!f.record) hide('record')
 })
 
 // Files opened from Finder: at launch they wait in Rust; later ones announce themselves.

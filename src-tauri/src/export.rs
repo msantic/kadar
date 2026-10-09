@@ -366,8 +366,8 @@ mod tests {
         std::fs::write(&result, b"data").unwrap();
         let a = super::save_next_to(&src.to_string_lossy(), &result.to_string_lossy()).unwrap();
         let b = super::save_next_to(&src.to_string_lossy(), &result.to_string_lossy()).unwrap();
-        assert!(a.ends_with("optimized/photo.webp"));
-        assert!(b.ends_with("optimized/photo-2.webp"));
+        assert!(std::path::Path::new(&a).ends_with("optimized/photo.webp"));
+        assert!(std::path::Path::new(&b).ends_with("optimized/photo-2.webp"));
     }
 
     #[test]
@@ -394,6 +394,6 @@ mod tests {
         }
         let names: std::collections::HashSet<_> = items.iter().map(|i| i.result.as_ref().unwrap().path.clone()).collect();
         assert_eq!(names.len(), 2, "no name is used twice");
-        assert!(names.iter().any(|n| n.ends_with("/photo-2.webp")), "the second photo gets -2");
+        assert!(names.iter().any(|n| std::path::Path::new(n).ends_with("photo-2.webp")), "the second photo gets -2");
     }
 }

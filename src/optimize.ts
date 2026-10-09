@@ -6,6 +6,7 @@ import { listen } from '@tauri-apps/api/event'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { el, hide, persist, show } from './shared'
 import { words } from './platform'
+import { baseName } from './paths'
 
 interface Progress {
   file: string
@@ -117,7 +118,7 @@ export function initOptimize(isActive: () => boolean): void {
   function addToQueue(filePath: string): void {
     if (items.has(filePath)) return
     queue.hidden = false
-    const fileName = filePath.split('/').pop()!
+    const fileName = baseName(filePath)
     const ext = fileName.split('.').pop()?.toLowerCase() ?? ''
     const kind = VIDEO_EXTS.has(ext) ? 'video' : 'image'
 

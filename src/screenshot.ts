@@ -1,6 +1,7 @@
 // Screenshot tab — window picker, resize, capture via screencapture CLI
 
 import { loadRunningApps, setupPresetChange, doResize, getSaveDir, setupSaveDir, el, show, hide, persist, formatRatio } from './shared'
+import { baseName, parentOf } from './paths'
 
 interface ScreenshotBridge {
   getRunningApps: () => Promise<string[]>
@@ -129,7 +130,7 @@ async function captureScreenshot(): Promise<void> {
       scale,
     })
 
-    el('ss-result-path').textContent = filePath.split('/').pop() ?? filePath
+    el('ss-result-path').textContent = baseName(filePath)
     el<HTMLButtonElement>('ss-show-result-btn').dataset['path'] = filePath
     show('ss-result')
   } catch (err) {
@@ -147,6 +148,6 @@ async function captureScreenshot(): Promise<void> {
 function onShowResult(): void {
   const filePath = el<HTMLButtonElement>('ss-show-result-btn').dataset['path']
   if (!filePath) return
-  const dir = filePath.substring(0, filePath.lastIndexOf('/'))
-  window.optimizer.openInFinder(dir)
+  const dir = parentOf(filePath)
+  if (dir) window.optimizer.openInFinder(dir)
 }

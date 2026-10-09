@@ -3,6 +3,7 @@
 
 import type { FileEntry } from '../types'
 import { formatBytes } from '../format'
+import { parentOf } from '../../paths'
 
 const KEY = 'kadar:info-open'
 
@@ -103,7 +104,7 @@ export function createInfoPanel(onToggle: () => void): InfoPanel {
       ['Length', meta?.durationMs ? duration(meta.durationMs) : undefined],
       ['Taken', exifDate(str(exif['DateTimeOriginal']))],
       ['Modified', dateFormat.format(new Date(entry.mtimeMs))],
-      ['Folder', entry.path.slice(0, entry.path.lastIndexOf('/'))],
+      ['Folder', parentOf(entry.path) ?? ''],
     ]))
 
     const make = str(tiff['Make'])

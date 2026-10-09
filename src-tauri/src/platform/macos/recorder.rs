@@ -247,7 +247,7 @@ impl Recorder {
             }
         }
 
-        let dir = crate::platform::capture::expand_home(&opts.output_dir);
+        let dir = crate::platform::expand_home(&opts.output_dir);
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
         let final_base = dir.join(format!("recording-{stamp}"));
