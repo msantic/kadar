@@ -18,7 +18,14 @@ TypeScript, shown by the Mac's own WebKit. The app is now about 15 MB.
 - No Node.js runs in the app. Node is only a build tool.
 - The command-line optimizer from the Electron era was removed.
 
-### Mac only, Apple Silicon, macOS 15 or later (2026-10-08)
+### Windows and Linux are the final goal; Windows first (2026-10-09)
+
+This replaces "Mac only" below. The final goal is every feature on macOS, Windows and Linux. The
+first step is Windows with the Viewer, Optimize and Export for Web. Each system uses its own
+tools, as the Mac does, so each download stays small. See the Roadmap in README.md for the plan
+and the rules every new change must follow now.
+
+### Mac only, Apple Silicon, macOS 15 or later (2026-10-08, replaced 2026-10-09)
 
 The owner uses only Macs. macOS 15 is the first version that records the screen straight to a
 file (ScreenCaptureKit recording output) and captures the microphone with it.
@@ -26,7 +33,7 @@ file (ScreenCaptureKit recording output) and captures the microphone with it.
 - No Windows or Linux code paths, no cross-platform layers.
 - Mac frameworks are fine to use directly.
 
-### Mac frameworks before new libraries (2026-10-08)
+### Mac frameworks before new libraries (2026-10-08; since 2026-10-09: each system's own tools)
 
 A small app matters most. ImageIO decodes images and makes thumbnails; AVFoundation reads videos;
 ScreenCaptureKit records; CoreGraphics crops and draws; AppKit does the clipboard, drag and

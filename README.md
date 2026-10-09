@@ -1,6 +1,7 @@
 # Kadar
 
-Fast image viewer and image/video tool for macOS (Apple Silicon, macOS 15+). About 15 MB installed.
+Fast image viewer and image/video tool. Today for macOS (Apple Silicon, macOS 15+), about 15 MB
+installed. Windows and Linux are planned: see [Roadmap](#roadmap-windows-and-linux).
 
 - **Viewer** — folder tree, favorites, thumbnail grid, full-size view for images and videos.
 - **Optimize** — drop files or folders; get web-ready copies in an `optimized/` folder next to them.
@@ -51,3 +52,80 @@ Mac-specific code lives in `macos.rs`, `recorder.rs` and `capture.rs`.
 **Local files in the window** are served as `viewer-file://viewer/<path>` (with byte ranges for video).
 
 **Signing.** Release builds are signed with the Prelako Developer ID (`src-tauri/tauri.conf.json`). A stable signature keeps the Screen Recording and microphone permissions across rebuilds. `scripts/notarize.sh` makes a notarized installer to share (see docs/development.md).
+
+## Roadmap: Windows and Linux
+
+**Final goal:** every feature (Viewer, Optimize, Export for Web, Screenshot, Record) on macOS,
+Windows and Linux, and each download stays small.
+
+**First step (decided 2026-10-09):** Windows, with the Viewer, Optimize and Export for Web.
+Screenshot, Record and Linux come after it. Code written for the first step must not block them.
+
+### Rules for all new work, starting now
+
+1. **Each system's own tools first.** The Mac uses ImageIO and AVFoundation; Windows uses its
+   own image and video tools (WIC, Media Foundation); Linux uses the standard system libraries.
+   Do not bundle a large cross-platform image or video library to save code. Size matters more.
+2. **One shared core, one thin layer per system.** Everything that calls the operating system
+   lives behind one Rust module per system (`platform/macos`, `platform/windows`,
+   `platform/linux`) with the same functions. Shared code (thumbnail queue, cache, export
+   geometry, optimize naming, file serving, sorting) never calls a system API directly. New
+   Mac-only code goes into the Mac layer from now on.
+3. **Shared libraries stay shared.** libwebp, mozjpeg, oxipng, notify and the small ffmpeg work
+   on all three. ffmpeg is built once per system with the same flags.
+4. **One download per system.** The Mac download does not grow because of Windows or Linux.
+5. **Keys and words follow the system.** ⌘ on the Mac, Ctrl on Windows and Linux. "Finder" on
+   the Mac, "File Explorer" on Windows, "Files" on Linux. The window code asks one helper for
+   the key and the words; it never names ⌘ or Finder directly.
+6. **Every check runs on every system.** Build machines run `npm run check` on macOS, Windows
+   and Linux before a release.
+
+### What each Mac part becomes
+
+| Part | macOS (today) | Windows | Linux |
+|---|---|---|---|
+| Read images, thumbnails, size, camera data | ImageIO | WIC (built in) | gdk-pixbuf (comes with WebKitGTK) |
+| HEIC photos | ImageIO | WIC + Microsoft HEIF add-on (free, often present) | libheif (system package) |
+| RAW photos, big-view preview | ImageIO | WIC + Microsoft Raw Image add-on (free, often present) | libraw (system package) |
+| Photoshop (PSD) preview | ImageIO | Open question: no built-in reader | Open question |
+| Video frame and length | AVFoundation | Media Foundation | the bundled ffmpeg |
+| Copy files and picture | NSPasteboard | Windows clipboard (file list + PNG) | GTK clipboard (file list + PNG) |
+| Drag files out | NSDraggingSession | OLE drag (Copy only) | GTK drag (Copy only) |
+| Trash and Put Back | NSFileManager | Recycle Bin | freedesktop Trash |
+| Show in file manager, open in default app | `open`, Finder | File Explorer, default app | file manager over D-Bus, `xdg-open` |
+| Skip online-only cloud files | "dataless" file flag | "recall on access" file attribute | not needed |
+| Thumbnail workers | performance cores | performance cores | all cores |
+| Open from the file manager | Apple open event | start arguments + single instance | start arguments + single instance |
+| Menu bar | app menu at the top | menu in the window | menu in the window |
+| Browser engine | WebKit (built in) | WebView2 (built into Windows 10/11) | WebKitGTK (system package; video needs GStreamer) |
+| Screenshot of a window | `screencapture`, window list | Windows Graphics Capture | X11 window capture; Wayland asks the user to pick |
+| Record a window with sound | ScreenCaptureKit | Windows Graphics Capture + loopback sound, ffmpeg | PipeWire through the desktop portal |
+| Resize another app's window | AppleScript | Windows window API | X11 only; hidden on Wayland |
+| Signing and trust | Developer ID + notarization | code-signing certificate (yearly cost) | none; .deb, .rpm, AppImage |
+
+### Expected download size
+
+- macOS: 15 MB, as today.
+- Windows: about 15–20 MB (WebView2 and the image reader are part of Windows).
+- Linux .deb / .rpm: about 15 MB; the system libraries are listed as requirements.
+- Linux AppImage (runs without install): 40–60 MB, because it must include those libraries.
+
+### Order of work
+
+1. **Prepare on the Mac.** Move all Mac calls behind the Mac layer, and add the key and word
+   helper in the window. Nothing changes for the user; every check still passes.
+2. **Build machines.** Builds and checks run on macOS, Windows and Linux for every change.
+3. **Windows: Viewer, Optimize, Export for Web.** (The first step.)
+4. **Windows installer and signing.**
+5. **Linux: Viewer, Optimize, Export for Web.**
+6. **Screenshot** on Windows, then Linux.
+7. **Record** on Windows, then Linux.
+
+### Open questions for the owner
+
+- Windows signing: a yearly certificate, or Microsoft's signing service, or none at first
+  (Windows then shows an "unknown publisher" warning).
+- Photoshop files on Windows and Linux: skip them, or add a small PSD reader.
+- Which Linux systems to test: Ubuntu only, or also Fedora.
+- A Windows PC or a Windows virtual machine for hands-on tests, besides the build machines.
+

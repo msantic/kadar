@@ -4,8 +4,8 @@ Read README.md first. Then the guides in `docs/`: [architecture](docs/architectu
 
 ## Decisions (do not re-open without the owner asking)
 
-- **Mac only, Apple Silicon, macOS 15+.** No Windows or Linux code paths. macOS 15 is needed for screen recording to a file and microphone capture.
-- **Small app size matters most.** Prefer Mac frameworks (ImageIO, AVFoundation, ScreenCaptureKit, CoreGraphics) over new libraries. Check the `.app` size after adding a dependency (`npm run build` prints it; about 15 MB now).
+- **Mac today; Windows and Linux are the final goal, Windows first** (Viewer, Optimize, Export). Read the Roadmap in README.md before any change: system calls go behind one layer per system, each system uses its own image and video tools (no big bundled decoders), the window never names ⌘ or Finder directly. On the Mac: Apple Silicon, macOS 15+ (needed for screen recording to a file and microphone capture).
+- **Small app size matters most.** Prefer each system's own frameworks (Mac: ImageIO, AVFoundation, ScreenCaptureKit, CoreGraphics; Windows: WIC, Media Foundation) over new libraries. Check the `.app` size after adding a dependency (`npm run build` prints it; about 15 MB now).
 - **Video uses the self-built ffmpeg on purpose.** Apple's H.264 and HEVC encoders were tested: same file size, visibly blockier video. Do not move video encoding to AVFoundation.
 - **Release builds are signed with the Prelako Developer ID.** A stable signature keeps the Screen Recording and microphone permissions. Do not change the identity or the app id `com.msantic.kadar`.
 
