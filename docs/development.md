@@ -120,7 +120,10 @@ and Security › App-Specific Passwords):
 xcrun notarytool store-credentials kadar-notary --apple-id <apple id> --team-id FC2M54RD3H
 ```
 
-Raise `version` in `tauri.conf.json` before you share a new build, so people can tell builds apart.
+Raise the version before you share a new build, so people can tell builds apart. It stands in
+three places that must match: `src-tauri/tauri.conf.json` (the one the installers and the About
+window show), `src-tauri/Cargo.toml` and `package.json` (then `npm install --package-lock-only`).
+Kadar 1.0.0 was the first shared version (2026-10-09).
 
 ## ffmpeg
 
