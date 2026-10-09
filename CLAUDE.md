@@ -39,6 +39,12 @@ Read README.md first: it has what Kadar does and which file does what. This file
 - Never capture the whole screen or a screen area (`screencapture -R`). Other apps' windows can cover Kadar and show the owner's private content. This happened once.
 - Do not send synthetic clicks. They do not reach Kadar and can land in other apps. To test a flow, add a temporary call in `src/main.ts`, check, and remove it.
 
+## Measuring speed
+
+- Measure with `npx tauri dev --release` (add `~/.cargo/bin` to PATH); the debug build is many times slower at images.
+- Results on 10,000 photos (2026-10-09, 10 performance cores): folder opens in ~70 ms, first screen of thumbnails ~0.2 s, scrolling steady 60 fps, big view 5 ms, next image instant.
+- Test scripts that change the dev copy's session cannot put it back: the viewer writes its in-memory session again after the script. Use the test folder in the scratchpad, and say so.
+
 ## Safety
 
 - Before you delete any folder, list its contents. Git-ignored folders can hold the owner's files. One was lost this way.

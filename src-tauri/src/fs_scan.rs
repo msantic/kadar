@@ -167,3 +167,4 @@ mod tests {
         assert_eq!(natural_cmp("Apple", "banana"), Ordering::Less);
     }
 }
+
