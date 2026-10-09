@@ -82,6 +82,10 @@ Locations shows Home, Pictures, Desktop, Downloads and Movies.
 - Click the small arrow **▸** to show or hide the subfolders.
 - The folder that is open in the grid has a highlight.
 
+**Version**
+
+The bottom of the sidebar shows Kadar's version, for example "Kadar 1.0.0". On the Mac, **Kadar › About Kadar** also shows it.
+
 ### Toolbar
 
 **Folder path**

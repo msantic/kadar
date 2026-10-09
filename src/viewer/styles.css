@@ -48,6 +48,16 @@
 
 .viewer-sidebar-section { display: flex; flex-direction: column; }
 
+/* Kadar's version, pushed to the bottom of the sidebar. */
+.viewer-sidebar-version {
+  margin-top: auto;
+  padding: 8px 12px 2px;
+  font-size: 10px;
+  color: var(--muted);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 .viewer-ghost-btn {
   background: none;
   border: none;
