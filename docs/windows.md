@@ -18,7 +18,7 @@ runbook, with every setup step and every fault met, is in the `bimtly` repo:
 | Reach Windows | from the server: `ssh build@192.168.122.12`; the shell is **PowerShell**, not cmd |
 | Account | `build`, a local administrator; password on the server in `/mnt/data/vm/winbuild.password` (root only) and in the BIMTLY ansible vault (`vault_winbuild_password`) |
 | Kadar's copy | `C:\dev\kadar` (a git clone of github.com/msantic/kadar) |
-| Tools on it | Git, Node 22, Python 3.12, Visual Studio 2022 Build Tools with the Windows SDK, WebView2, Rust (stable, MSVC; installed for Kadar on 2026-10-09 with `rustup-init.exe -y --profile minimal -c clippy`) |
+| Tools on it | Git, Node 22, Python 3.12, Visual Studio 2022 Build Tools with the Windows SDK, WebView2. Added for Kadar on 2026-10-09: Rust (stable, MSVC; `rustup-init.exe -y --profile minimal -c clippy`) and MSYS2 in `C:\msys64` (for the video tool, see below) |
 
 ## Start and stop the machine
 
@@ -74,10 +74,36 @@ scripts/win.sh 'cd C:\dev\kadar; npm ci; npx tauri build --no-bundle'   # → sr
 
 - `npm run check` and `npm run build` are written for the Mac (they call bash scripts and the
   Mac signing). On Windows, run the steps directly as above until the Windows build script exists.
-- **The video tool:** Tauri needs `src-tauri\bin\ffmpeg-x86_64-pc-windows-msvc.exe` to build at all.
-  Until the Windows ffmpeg is built (Roadmap), a placeholder text file stands there. Video
-  compression and the video checks fail until then; everything else works.
+- **The video tool:** Tauri needs `src-tauri\bin\ffmpeg-x86_64-pc-windows-msvc.exe` to build at
+  all. Build it once (next part). That folder is not in git, so a fresh copy of the repository
+  needs the build again.
 - The `.exe` runs alone: the window content is inside it, and WebView2 is part of Windows 11.
+
+## The video tool (ffmpeg) on Windows
+
+The same `scripts/build-ffmpeg.sh` builds the Windows tool, with the same parts as on the Mac
+(x264, AAC, the same readers and filters). On Windows it runs in **MSYS2's MINGW64 shell**, a
+free set of Unix build tools, and makes one static `ffmpeg.exe` that needs no other files.
+
+Set up MSYS2 once (already done on `winbuild`):
+
+```powershell
+Invoke-WebRequest https://repo.msys2.org/distrib/msys2-x86_64-latest.sfx.exe -OutFile C:\dev\msys2.sfx.exe
+& C:\dev\msys2.sfx.exe -y -oC:\
+C:\msys64\usr\bin\bash.exe -lc "pacman-key --init && pacman-key --populate msys2"   # the package keys
+C:\msys64\usr\bin\bash.exe -lc "pacman -Syu --noconfirm"   # twice: the first run updates pacman itself
+C:\msys64\usr\bin\bash.exe -lc "pacman -S --noconfirm --needed mingw-w64-x86_64-gcc mingw-w64-x86_64-nasm mingw-w64-x86_64-zlib mingw-w64-x86_64-pkgconf make git diffutils tar xz"
+```
+
+Build the tool (about 20–30 minutes the first time; later runs skip it while `BUILD_ID` is the
+same):
+
+```bash
+scripts/win.sh '$ErrorActionPreference = "Continue"; $env:MSYSTEM = "MINGW64"; $env:CHERE_INVOKING = "1"; cd C:\dev\kadar; cmd /c "C:\msys64\usr\bin\bash.exe -lc scripts/build-ffmpeg.sh 2>&1"'
+```
+
+The result is `src-tauri\bin\ffmpeg-x86_64-pc-windows-msvc.exe`. Kadar ships it as `ffmpeg.exe`
+next to `kadar.exe`. The video checks (`cargo test`) run it on `tests/data/clip.mov`.
 
 ## See Kadar on Windows (remote screen)
 
@@ -96,9 +122,9 @@ session; use the remote screen instead.
    ```
 3. **Connect** with Microsoft's **Windows App** (Mac App Store): Add PC → PC name `localhost`,
    user `build`, paste the password. The first time, accept the machine's certificate.
-4. **Start Kadar** in that session: double-click **Kadar** on the desktop (a copy of the latest
-   `kadar.exe`), or run `C:\dev\kadar\src-tauri\target\release\kadar.exe`.
-   Test photos are in Pictures › "Kadar test".
+4. **Start Kadar** in that session: double-click **Kadar** on the desktop. The shortcut opens
+   `C:\Users\build\Kadar\Kadar.exe`, with the video tool beside it as `ffmpeg.exe`, as the
+   installer will place them. Test photos and a short video are in Pictures › "Kadar test".
 5. When done: sign out of the session (Start → user → Sign out), and stop the tunnel (Ctrl+C).
 
 The picture is compressed, so colors and sharpness look a little worse than on a real screen.
@@ -111,11 +137,18 @@ After a rebuild, replace the running copy and start it again **in the signed-in 
 of the signed-in `build` user:
 
 ```bash
-scripts/win.sh 'cd C:\dev\kadar; cmd /c "npx tauri build --no-bundle 2>&1" | Select-Object -Last 2
+scripts/win.sh <<'PS'
+$ErrorActionPreference = "Continue"
+cd C:\dev\kadar
+cmd /c "npx tauri build --no-bundle 2>&1" | Select-Object -Last 1
 Stop-Process -Name Kadar -Force -ErrorAction SilentlyContinue; Start-Sleep 1
-Copy-Item src-tauri\target\release\kadar.exe "$env:USERPROFILE\Desktop\Kadar.exe" -Force
-schtasks /Create /TN KadarShow /TR "$env:USERPROFILE\Desktop\Kadar.exe" /SC ONCE /ST 23:59 /IT /RU build /F
-schtasks /Run /TN KadarShow'
+$app = "$env:USERPROFILE\Kadar"
+New-Item -ItemType Directory -Force $app | Out-Null
+Copy-Item src-tauri\target\release\kadar.exe "$app\Kadar.exe" -Force
+Copy-Item src-tauri\bin\ffmpeg-x86_64-pc-windows-msvc.exe "$app\ffmpeg.exe" -Force
+schtasks /Create /TN KadarShow /TR "$app\Kadar.exe" /SC ONCE /ST 23:59 /IT /RU build /F | Out-Null
+schtasks /Run /TN KadarShow | Out-Null
+PS
 ```
 
 `Get-Process Kadar | Select-Object Id,SessionId` shows where it runs: session 0 is the hidden one,
@@ -154,7 +187,8 @@ desktopheight:i:1000
   "HEIF Image Extensions" and "Raw Image Extension" from the Microsoft Store; most Windows 11
   PCs have them. Colors are read as sRGB for now.
 - **Video frames and length:** from File Explorer's own thumbnails and details.
-- **Not yet:** the Windows video tool (video optimizing), dragging files out, Screenshot, Record,
+- **Video:** optimizing works with the bundled ffmpeg (built for Windows, 10.7 MB, static).
+- **Not yet:** dragging files out, Screenshot, Record,
   an installer and signing, and one Kadar at a time (today "Open with Kadar" on a second file
   starts a second Kadar window instead of showing the file in the first).
 - **Names:** Kadar refuses new names with `\ : * ? " < > |`, as Windows does.
@@ -168,6 +202,7 @@ desktopheight:i:1000
 | `resource path bin\ffmpeg-x86_64-pc-windows-msvc.exe doesn't exist` | Tauri wants the video tool for every build. Put the Windows ffmpeg there, or a placeholder file until it exists. |
 | PowerShell says "The ampersand (&) character is not allowed" | The shell is PowerShell, not cmd. Use `;` between commands, or `cmd /c "..."` for cmd syntax. `scripts/win.sh` avoids quoting problems. |
 | A `cargo` or `npm` line prints nothing over SSH | Their output goes to the error stream. Wrap them: `cmd /c "cargo test 2>&1"`. |
+| A long tool (pacman, a build) stops at its first progress line | `scripts/win.sh` stops at the first error, and PowerShell 5 counts any line a native tool writes to the error stream as one when it is redirected with `2>&1`. Start such a script with `$ErrorActionPreference = "Continue"` and run the tool through `cmd /c "... 2>&1"`. |
 | Checks that compare paths with `/` fail on Windows | Windows paths use `\`. Compare with `Path` methods (`ends_with`, `join`), not with strings. |
 | Kadar does not appear after starting it over SSH | SSH runs programs in a hidden session. Start it in the remote screen. |
 | The build sees old code after a sync | The files kept the Mac's times. `scripts/win-sync.sh` unpacks with `-m` for this reason; do not copy files by other means. |

@@ -190,7 +190,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(target_os = "windows", ignore = "the Windows ffmpeg is not built yet (Roadmap)")]
     fn compresses_a_clip_to_mp4() {
         let dir = crate::testutil::temp_dir("video-compress");
         let dest = dir.join("out").join("clip.mp4");
@@ -208,7 +207,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(target_os = "windows", ignore = "the Windows ffmpeg is not built yet (Roadmap)")]
     fn a_failed_run_leaves_no_file_and_says_why() {
         let dir = crate::testutil::temp_dir("video-fail");
         let src = dir.join("broken.mov");

@@ -117,8 +117,8 @@ Screenshot, Record and Linux come after it. Code written for the first step must
    the Mac crates build only for macOS, and the window asks `src/platform.ts` for keys and words.
 2. **Build machines.** Builds and checks run on macOS, Windows and Linux for every change.
 3. **Windows: Viewer, Optimize, Export for Web.** (The first step.) Started 2026-10-09: Kadar
-   builds and runs on Windows; the Viewer, image optimizing and Export for Web work. Left: the
-   Windows video tool, drag-out, an installer. Steps and the remote screen: [docs/windows.md](docs/windows.md).
+   builds and runs on Windows; the Viewer, image and video optimizing and Export for Web work.
+   Left: drag-out, an installer. Steps and the remote screen: [docs/windows.md](docs/windows.md).
 4. **Windows installer and signing.**
 5. **Linux: Viewer, Optimize, Export for Web.**
 6. **Screenshot** on Windows, then Linux.

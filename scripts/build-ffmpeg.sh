@@ -1,5 +1,8 @@
 #!/bin/bash
-# Builds the small ffmpeg that Kadar ships for video optimizing (Apple Silicon, macOS 15+, as Kadar).
+# Builds the small ffmpeg that Kadar ships for video optimizing. One script for every system:
+# - macOS (Apple Silicon, 15+, as Kadar): run as is.
+# - Windows (x86_64): run inside MSYS2's MINGW64 shell on the build machine; it makes a static
+#   ffmpeg.exe that needs no other files (docs/windows.md, "The video tool").
 #
 # Why not the Mac's own encoder: at the same file size its H.264 output is visibly worse than
 # x264 (blocky, soft text). Why not a stock ffmpeg: that is 45 MB. This one has only what the
@@ -11,7 +14,17 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OUT="$ROOT/src-tauri/bin/ffmpeg-aarch64-apple-darwin"
+case "$(uname -s)" in
+  Darwin) SYSTEM=mac ;;
+  MINGW64*) SYSTEM=windows ;;
+  *) echo "build-ffmpeg: run on macOS, or on Windows in MSYS2's MINGW64 shell" >&2; exit 1 ;;
+esac
+# Tauri finds the tool by this name, with the system's target name in it.
+if [ "$SYSTEM" = windows ]; then
+  OUT="$ROOT/src-tauri/bin/ffmpeg-x86_64-pc-windows-msvc.exe"
+else
+  OUT="$ROOT/src-tauri/bin/ffmpeg-aarch64-apple-darwin"
+fi
 FFMPEG_VERSION="7.1.1"
 # Bump when the configure flags change, so existing copies are rebuilt.
 BUILD_ID="3"
@@ -23,8 +36,15 @@ fi
 
 WORK="$ROOT/src-tauri/target/ffmpeg-build"
 PREFIX="$WORK/prefix"
-JOBS="$(sysctl -n hw.ncpu)"
-export MACOSX_DEPLOYMENT_TARGET=15.0
+if [ "$SYSTEM" = windows ]; then
+  JOBS="$(nproc)"
+  # Everything linked in, so ffmpeg.exe runs without MinGW's own DLLs next to it.
+  STATIC_LDFLAGS="-static"
+else
+  JOBS="$(sysctl -n hw.ncpu)"
+  STATIC_LDFLAGS=""
+  export MACOSX_DEPLOYMENT_TARGET=15.0
+fi
 mkdir -p "$WORK"
 cd "$WORK"
 
@@ -52,7 +72,7 @@ PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" ./configure \
   --prefix="$WORK/ffmpeg-out" \
   --pkg-config-flags=--static \
   --extra-cflags="-I$PREFIX/include" \
-  --extra-ldflags="-L$PREFIX/lib" \
+  --extra-ldflags="-L$PREFIX/lib $STATIC_LDFLAGS" \
   --enable-gpl --enable-libx264 \
   --enable-static --disable-shared \
   --disable-autodetect --enable-zlib \
@@ -70,7 +90,7 @@ PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig" ./configure \
 make -j"$JOBS" > make.log 2>&1 || { tail -30 make.log; exit 1; }
 
 mkdir -p "$(dirname "$OUT")"
-cp ffmpeg "$OUT"
+if [ "$SYSTEM" = windows ]; then cp ffmpeg.exe "$OUT"; else cp ffmpeg "$OUT"; fi
 strip "$OUT"
 echo "$BUILD_ID" > "$STAMP"
 echo "==> Done: $OUT ($(du -h "$OUT" | cut -f1))"

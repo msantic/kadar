@@ -696,7 +696,7 @@ In Finder, Kadar shows in **Open With** for these types: JPG, JPEG, PNG, HEIC, H
 
 ## Kadar on Windows
 
-Kadar on Windows is new. The Viewer, Optimize (images) and Export for Web work. Video optimizing, dragging files out, Record and Screenshot come later.
+Kadar on Windows is new. The Viewer, Optimize (images and videos) and Export for Web work. Dragging files out, Record and Screenshot come later.
 
 - Kadar on Windows has no menu bar. Use the keys below, or right-click a file.
 - Use **Ctrl** where this guide says **⌘**.
