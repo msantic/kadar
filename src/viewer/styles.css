@@ -599,13 +599,15 @@
 }
 .viewer-cell[data-kind="folder"] .viewer-cell-img { display: none; }
 
-/* Clickable folder path in the toolbar */
+/* Clickable folder path in the toolbar: starts at the left; a long path scrolls so its end
+   (the current folder) stays visible. */
 .viewer-path {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   align-items: center;
   gap: 2px;
   direction: ltr;
+  overflow: hidden;
 }
 .viewer-path-part {
   flex-shrink: 0;

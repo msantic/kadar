@@ -64,7 +64,10 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
       nodes.push(btn)
     })
     pathEl.replaceChildren(...nodes)
+    showPathEnd()
   }
+  const showPathEnd = (): void => { requestAnimationFrame(() => { pathEl.scrollLeft = pathEl.scrollWidth }) }
+  new ResizeObserver(showPathEnd).observe(pathEl)
   const openBtn = document.createElement('button')
   openBtn.className = 'viewer-ghost-btn'
   openBtn.textContent = 'Open Folder…'
