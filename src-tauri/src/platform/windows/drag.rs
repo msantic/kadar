@@ -1,5 +1,5 @@
 //! Dragging files out of Kadar on Windows: not ready yet (an OLE drag with Copy only comes next).
-//! The window shows the message; nothing else changes.
+//! The window ignores the refusal, as it ignores a failed drag on the Mac: nothing happens.
 
 use tauri::WebviewWindow;
 

@@ -155,7 +155,11 @@ desktopheight:i:1000
   PCs have them. Colors are read as sRGB for now.
 - **Video frames and length:** from File Explorer's own thumbnails and details.
 - **Not yet:** the Windows video tool (video optimizing), dragging files out, Screenshot, Record,
-  an installer and signing.
+  an installer and signing, and one Kadar at a time (today "Open with Kadar" on a second file
+  starts a second Kadar window instead of showing the file in the first).
+- **Names:** Kadar refuses new names with `\ : * ? " < > |`, as Windows does.
+- **Undo after the Recycle Bin** moves the file back and removes the bin's record of it, so the
+  Recycle Bin does not list a file that is no longer there.
 
 ## Known traps
 

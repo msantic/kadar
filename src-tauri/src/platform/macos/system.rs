@@ -36,6 +36,10 @@ pub fn trash(paths: &[String]) -> Result<Vec<(String, String)>, String> {
     }
 }
 
+/// After Undo moved a file out of the Trash. The Mac's Trash keeps no separate record of it, so
+/// there is nothing to clean up.
+pub fn forget_trashed(_trashed: &str) {}
+
 /// Shows the file selected in a Finder window. Does not wait; errors are ignored.
 pub fn reveal(path: &str) {
     let _ = Command::new("open").arg("-R").arg(path).spawn();

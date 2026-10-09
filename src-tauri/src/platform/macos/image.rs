@@ -232,13 +232,7 @@ pub fn crop(frame: &Frame, x: f64, y: f64, w: f64, h: f64) -> Option<Frame> {
 /// Full image, EXIF rotation applied, scaled down so its width is at most `max_width`.
 pub fn decode_for_web(path: &Path, max_width: u32) -> Result<Rgba, String> {
     let (w, h) = image_size(path).ok_or("cannot read image")?;
-    let long = w.max(h);
-    let long = if w > max_width {
-        ((long as f64) * (max_width as f64) / (w as f64)).round() as u32
-    } else {
-        long
-    };
-    to_rgba(&image_thumbnail(path, long)?)
+    to_rgba(&image_thumbnail(path, crate::platform::long_side_for_width(w, h, max_width))?)
 }
 
 /// The image as PNG bytes, for the clipboard (web pages and chats paste PNG). PNG files are

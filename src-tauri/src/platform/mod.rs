@@ -11,7 +11,8 @@
 //!   part (`draw_turned`). Results are `Rgba` pixels or the system's own `Frame`. (A system's
 //!   own capture code may use more helpers from its `image`; they are not shared.)
 //! - `system`: Trash, show in the file manager, open in the default app, open a web link,
-//!   "is this a cloud file not on disk yet", and the number of fast processor cores. The Mac's
+//!   "is this a cloud file not on disk yet", the number of fast processor cores, and
+//!   `forget_trashed` (clean up after Undo put a file back). The Mac's
 //!   also names Finder and the Trash for its menu bar (`FILE_MANAGER`, `TRASH`); other systems
 //!   have no menu bar, and the window takes its words from `src/platform.ts`.
 //! - `clipboard`: copy files (plus a picture for one image), paths, or text.
@@ -63,6 +64,13 @@ pub struct Rgba {
     pub opaque: bool,
 }
 
+/// The long side to decode at so the image's width ends at most `max_width` (never larger than
+/// the original): `w` × `h` are the stored pixel sizes.
+pub fn long_side_for_width(w: u32, h: u32, max_width: u32) -> u32 {
+    let long = w.max(h);
+    if w > max_width { ((long as f64) * (max_width as f64) / (w as f64)).round() as u32 } else { long }
+}
+
 /// System drawing works in premultiplied alpha (color already multiplied by opacity); encoders
 /// expect straight alpha. Converts RGBA pixels in place. Returns true when every pixel is opaque.
 pub fn unpremultiply(data: &mut [u8]) -> bool {
@@ -93,6 +101,13 @@ mod tests {
         assert_eq!(&px[8..], [0, 0, 0, 0], "fully clear stays clear");
         let mut solid = [1, 2, 3, 255];
         assert!(super::unpremultiply(&mut solid));
+    }
+
+    #[test]
+    fn decode_size_fits_the_width() {
+        assert_eq!(super::long_side_for_width(4000, 3000, 1600), 1600);
+        assert_eq!(super::long_side_for_width(3000, 4000, 1500), 2000, "a tall photo: the width decides");
+        assert_eq!(super::long_side_for_width(800, 600, 1600), 800, "never larger");
     }
 
     #[test]

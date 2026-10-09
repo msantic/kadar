@@ -41,11 +41,16 @@ export interface Crumb {
   path: string
 }
 
-/** The parts of a folder path, from the top: "/Users/me" → Users, me; "C:\Users" → C:, Users. */
+/** The parts of a folder path, from the top: "/Users/me" → Users, me; "C:\Users" → C:, Users;
+ *  a network folder "\\server\share\a" → \\server\share, a (a share is the top there). */
 export function crumbs(path: string): Crumb[] {
   const sep = separatorOf(path)
-  const drive = /^[A-Za-z]:/.test(path)
   const parts = path.split(SEPARATOR).filter(Boolean)
+  if (/^[\\/]{2}[^\\/]/.test(path) && parts.length >= 2) {
+    const top = `${sep}${sep}${parts[0]}${sep}${parts[1]}`
+    return [{ name: top, path: top }, ...parts.slice(2).map((name, i) => ({ name, path: [top, ...parts.slice(2, i + 3)].join(sep) }))]
+  }
+  const drive = /^[A-Za-z]:/.test(path)
   return parts.map((name, i) => {
     const joined = parts.slice(0, i + 1).join(sep)
     const full = drive ? (i === 0 ? joined + sep : joined) : `/${joined}`

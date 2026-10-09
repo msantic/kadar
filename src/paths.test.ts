@@ -30,5 +30,8 @@ describe('paths', () => {
     expect(crumbs('C:\\Users\\me')).toEqual([
       { name: 'C:', path: 'C:\\' }, { name: 'Users', path: 'C:\\Users' }, { name: 'me', path: 'C:\\Users\\me' },
     ])
+    expect(crumbs('\\\\nas\\photos\\2025')).toEqual([
+      { name: '\\\\nas\\photos', path: '\\\\nas\\photos' }, { name: '2025', path: '\\\\nas\\photos\\2025' },
+    ])
   })
 })

@@ -32,8 +32,11 @@ let viewerStarted = false
 let screenshotStarted = false
 let recorderStarted = false
 
+/** Tabs this system cannot run yet (Screenshot and Record on Windows); see `platform_features`. */
+const unavailable = new Set<string>()
+
 function switchTab(tab: string, open: OpenItem[] = []): void {
-  if (!(tab in panels)) tab = 'viewer'
+  if (!(tab in panels) || unavailable.has(tab)) tab = 'viewer'
   activeTab = tab
   for (const [name, panel] of Object.entries(panels)) panel.hidden = name !== tab
   document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach((b) => {
@@ -129,6 +132,7 @@ if (system !== 'mac') {
 // Tabs that are not ready on this system yet (Screenshot and Record on Windows) stay hidden.
 void invoke<{ screenshot: boolean; record: boolean }>('platform_features').then((f) => {
   const hide = (tab: string): void => {
+    unavailable.add(tab)
     document.querySelector<HTMLElement>(`.tab-btn[data-tab="${tab}"]`)?.setAttribute('hidden', '')
     if (activeTab === tab) switchTab('viewer')
   }

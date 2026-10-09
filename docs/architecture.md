@@ -216,7 +216,7 @@ when asked. `capture_resize_window` moves and sizes the app's front window with 
   refuses the drop. The source allows **Copy only**; with Move or Generic, Finder moves the
   owner's file away.
 - **Trash** (`trash_files`): `NSFileManager.trashItemAtURL`, returns `[original, inTrash]` pairs.
-  **Put back** renames each file back and never replaces an existing file. Both feed Undo.
+  **Put back** renames each file back and never replaces an existing file, then calls `platform::system::forget_trashed` (Windows deletes the bin's `$I` record; the Mac has none). Both feed Undo. On Windows, `trash` uses IFileOperation with a progress sink to learn each file's place in the Recycle Bin, and skips files that are gone.
 - **Rename** (`rename_file`): rejects empty names, `/`, NUL, `.`/`..`, and names already taken;
   a case-only change is allowed.
 - **Open With from Finder:** `RunEvent::Opened` pushes paths into `OpenedFiles` (managed on the

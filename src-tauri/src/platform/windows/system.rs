@@ -76,9 +76,19 @@ pub fn trash(paths: &[String]) -> Result<Vec<(String, String)>, String> {
             .map_err(|e| e.message())?;
         let object = ComObject::new(TrashSink { moved: RefCell::new(Vec::new()) });
         let sink: IFileOperationProgressSink = object.to_interface();
+        // A file that is gone already (moved away in File Explorer) is skipped; the rest still move.
+        let mut queued = 0;
+        let mut last_error = None;
         for path in paths {
-            let item: IShellItem = SHCreateItemFromParsingName(&HSTRING::from(backslashes(path)), None).map_err(|e| e.message())?;
-            op.DeleteItem(&item, &sink).map_err(|e| e.message())?;
+            let item: WinResult<IShellItem> = SHCreateItemFromParsingName(&HSTRING::from(backslashes(path)), None);
+            let item = item.and_then(|item| op.DeleteItem(&item, &sink));
+            match item {
+                Ok(()) => queued += 1,
+                Err(e) => last_error = Some(e.message()),
+            }
+        }
+        if queued == 0 {
+            return Err(last_error.unwrap_or_else(|| "Nothing to move.".into()));
         }
         let result = op.PerformOperations();
         let collected = object.moved.take();
@@ -99,7 +109,20 @@ pub fn trash(paths: &[String]) -> Result<Vec<(String, String)>, String> {
 
 /// Shows the file selected in a File Explorer window. Does not wait; errors are ignored.
 pub fn reveal(path: &str) {
-    let _ = Command::new("explorer.exe").arg(format!("/select,{}", backslashes(path))).spawn();
+    use std::os::windows::process::CommandExt;
+    // Explorer reads `/select,"<path>"` itself; the usual argument quoting would wrap the whole
+    // switch in quotes, and Explorer then opens Documents for paths with spaces.
+    let _ = Command::new("explorer.exe").raw_arg(format!("/select,\"{}\"", backslashes(path))).spawn();
+}
+
+/// After Undo moved a file out of the Recycle Bin: removes the bin's record of it (the `$I` file
+/// beside the `$R` file it was), so the Recycle Bin does not list a file that is no longer there.
+pub fn forget_trashed(trashed: &str) {
+    let path = Path::new(trashed);
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name().and_then(|n| n.to_str())) else { return };
+    if let Some(rest) = name.strip_prefix("$R") {
+        let _ = std::fs::remove_file(dir.join(format!("$I{rest}")));
+    }
 }
 
 /// Opens with the shell's "open" verb. Err when Windows has no app for it.
@@ -189,7 +212,13 @@ mod tests {
         assert_eq!(moved[0].0, path, "the window's own spelling comes back");
         assert!(!f.exists());
         assert!(std::path::Path::new(&moved[0].1).exists(), "the file is in the Recycle Bin");
-        // Put it back, as Undo does, so the check leaves no trace.
+        // Put it back, as Undo does, so the check leaves no trace in the Recycle Bin.
         std::fs::rename(&moved[0].1, &f).unwrap();
+        super::forget_trashed(&moved[0].1);
+        let record = std::path::Path::new(&moved[0].1).with_file_name(
+            std::path::Path::new(&moved[0].1).file_name().unwrap().to_string_lossy().replacen("$R", "$I", 1),
+        );
+        assert!(!record.exists(), "the bin forgets the file");
+        assert!(super::trash(&[dir.join("gone.jpg").to_string_lossy().into_owned()]).is_err());
     }
 }

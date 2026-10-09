@@ -209,13 +209,13 @@ unsafe fn bitmap_pixels(bitmap: HBITMAP) -> Result<Rgba, String> {
     let (w, h) = (info.bmWidth.max(1) as u32, info.bmHeight.unsigned_abs().max(1));
     let mut header = BITMAPINFO {
         bmiHeader: BITMAPINFOHEADER {
-        biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
-        biWidth: w as i32,
-        biHeight: -(h as i32), // top row first
-        biPlanes: 1,
-        biBitCount: 32,
-        biCompression: BI_RGB.0,
-        ..Default::default()
+            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: w as i32,
+            biHeight: -(h as i32), // top row first
+            biPlanes: 1,
+            biBitCount: 32,
+            biCompression: BI_RGB.0,
+            ..Default::default()
         },
         ..Default::default()
     };
@@ -324,9 +324,7 @@ pub fn draw_turned(frame: &Frame, rect: (f64, f64, f64, f64), turns: u8, out_w: 
 /// Full image, turned upright, scaled down so its width is at most `max_width`.
 pub fn decode_for_web(path: &Path, max_width: u32) -> Result<Rgba, String> {
     let (w, h) = image_size(path).ok_or("cannot read image")?;
-    let long = w.max(h);
-    let long = if w > max_width { ((long as f64) * (max_width as f64) / (w as f64)).round() as u32 } else { long };
-    image_thumbnail(path, long)
+    image_thumbnail(path, crate::platform::long_side_for_width(w, h, max_width))
 }
 
 /// The image as PNG bytes, for the clipboard. PNG files are used as they are; other formats are
@@ -403,7 +401,6 @@ pub fn image_properties(path: &Path) -> Option<Value> {
     };
 
     put(&mut top, "Orientation", q("System.Photo.Orientation").and_then(|v| as_u32(&v)).map(|n| json!(n)));
-    put(&mut top, "Depth", q("System.Image.BitDepth").and_then(|v| as_u32(&v)).map(|n| json!(n / 4)));
 
     let mut tiff = Map::new();
     put(&mut tiff, "Make", text("System.Photo.CameraManufacturer").map(Value::String));

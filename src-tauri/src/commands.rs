@@ -90,7 +90,10 @@ pub fn put_back(pairs: Vec<(String, String)>) -> Result<Vec<String>, String> {
             continue;
         }
         match std::fs::rename(&trashed, &original) {
-            Ok(()) => back.push(original),
+            Ok(()) => {
+                system::forget_trashed(&trashed);
+                back.push(original);
+            }
             Err(e) => last_error = Some(e.to_string()),
         }
     }
@@ -100,12 +103,15 @@ pub fn put_back(pairs: Vec<(String, String)>) -> Result<Vec<String>, String> {
     }
 }
 
-/// Renames a file in its folder. Returns the new path. Refuses names with "/" and names that
+/// Renames a file in its folder. Returns the new path. Refuses names with "/" (and on Windows
+/// the other characters Windows forbids) and names that
 /// another file already has (a change of upper/lower case only is allowed).
 #[tauri::command(async)]
 pub fn rename_file(path: String, new_name: String) -> Result<String, String> {
     let name = new_name.trim();
-    if name.is_empty() || name == "." || name == ".." || name.contains('/') || name.contains('\0') {
+    // Windows also refuses \ : * ? " < > | in names; there they would move or break the file.
+    let windows_only = cfg!(target_os = "windows") && name.contains(['\\', ':', '*', '?', '"', '<', '>', '|']);
+    if name.is_empty() || name == "." || name == ".." || name.contains('/') || name.contains('\0') || windows_only {
         return Err("This name is not allowed.".into());
     }
     let src = Path::new(&path);
