@@ -373,7 +373,21 @@
   font-size: 12px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
   pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
+.viewer-toast-action {
+  pointer-events: auto;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.viewer-toast-action:hover { text-decoration: underline; }
 
 
 /* Name filter in the toolbar */

@@ -118,7 +118,13 @@ export async function optimizeSelection(): Promise<void> {
   emit('toast', { text: `Optimizing ${plural(paths.length, 'file', 'files')}…` })
   try {
     const n = await window.viewer.share.optimize(paths)
-    emit('toast', { text: `Optimized ${plural(n, 'file', 'files')} → "optimized" folder` })
+    // Results land in an "optimized" folder next to the files.
+    const first = paths[0]!
+    const folder = `${first.slice(0, first.lastIndexOf('/'))}/optimized`
+    emit('toast', {
+      text: `Optimized ${plural(n, 'file', 'files')} → "optimized" folder`,
+      action: { label: 'Show in Finder', run: () => void window.viewer.fs.openDefault(folder) },
+    })
   } catch (err) {
     emit('toast', { text: `Optimize failed: ${String(err)}` })
   } finally {

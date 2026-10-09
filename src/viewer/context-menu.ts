@@ -59,6 +59,7 @@ export async function showContextMenu(x: number, y: number): Promise<void> {
       }),
       await MenuItem.new({
         text: many ? `Optimize ${n} Files` : 'Optimize',
+        accelerator: 'Shift+Cmd+O',
         action: () => void optimizeSelection(),
       }),
       await separator(),

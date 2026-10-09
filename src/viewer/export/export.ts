@@ -324,7 +324,10 @@ export function createExport(): HTMLElement {
     if (!latest) return
     try {
       const saved = await window.viewer.share.exportSave(path, latest.path)
-      emit('toast', { text: `Saved → optimized/${saved.split('/').pop()}` })
+      emit('toast', {
+        text: `Saved → optimized/${saved.split('/').pop()}`,
+        action: { label: 'Show in Finder', run: () => void window.viewer.fs.revealInFinder(saved) },
+      })
     } catch (err) {
       emit('toast', { text: `Save failed: ${String(err)}` })
     }

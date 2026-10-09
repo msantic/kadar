@@ -288,11 +288,21 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
   toast.hidden = true
   document.body.appendChild(toast)
   let toastTimer: ReturnType<typeof setTimeout> | null = null
-  on('toast', ({ text }) => {
-    toast.textContent = text
+  on('toast', ({ text, action }) => {
+    toast.replaceChildren(document.createTextNode(text))
+    if (action) {
+      const btn = document.createElement('button')
+      btn.className = 'viewer-toast-action'
+      btn.textContent = action.label
+      btn.addEventListener('click', () => {
+        action.run()
+        toast.hidden = true
+      })
+      toast.append(btn)
+    }
     toast.hidden = false
     if (toastTimer !== null) clearTimeout(toastTimer)
-    toastTimer = setTimeout(() => { toast.hidden = true }, 1600)
+    toastTimer = setTimeout(() => { toast.hidden = true }, action ? 5000 : 1600)
   })
 
   // Live folder: files added, removed or changed show up without reopening the folder.

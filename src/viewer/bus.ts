@@ -4,7 +4,8 @@ export interface BusEvents {
   'lightbox:open': { index: number }
   'lightbox:close': void
   'lightbox:step': { delta: number }
-  'toast': { text: string }
+  /** Short message at the bottom; with `action`, it shows a button and stays longer. */
+  'toast': { text: string; action?: { label: string; run: () => void } }
   'folder:refresh': void
   'rename:start': void
   'export:open': { path: string }

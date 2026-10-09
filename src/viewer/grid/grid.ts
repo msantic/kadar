@@ -3,7 +3,7 @@ import { createCell, assignCell, setCellThumb, positionCell, type CellHandle } f
 import { ThumbLoader } from './thumb-loader'
 import { subscribe, getState } from '../store'
 import {
-  copySelection, extendTo, openSelectionDefault, selectAll, selectedPaths, selectOnly, selectPath, toggle, trashSelection,
+  copySelection, extendTo, openSelectionDefault, optimizeSelection, selectAll, selectedPaths, selectOnly, selectPath, toggle, trashSelection,
 } from '../selection'
 import { on } from '../bus'
 import { showContextMenu } from '../context-menu'
@@ -131,7 +131,11 @@ export function createGrid(): GridHandle {
       const key = e.key.toLowerCase()
       // Cmd+O or Cmd+Down opens the files in their default apps; Cmd+Delete moves them to the
       // Trash. Both as in Finder.
-      if ((key === 'o' || e.key === 'ArrowDown') && current >= 0) {
+      // Shift+Cmd+O optimizes the selection (web copies in an "optimized" folder).
+      if (key === 'o' && e.shiftKey && current >= 0) {
+        e.preventDefault()
+        void optimizeSelection()
+      } else if ((key === 'o' || e.key === 'ArrowDown') && current >= 0) {
         e.preventDefault()
         openSelectionDefault()
       } else if (e.key === 'Backspace' && current >= 0) {
