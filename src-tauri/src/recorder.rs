@@ -215,20 +215,11 @@ impl Recorder {
                 let own = NSArray::from_retained_slice(&own);
                 SCContentFilter::initWithDisplay_excludingWindows(SCContentFilter::alloc(), &display, &own)
             } else {
-                // The app's largest normal window, as for screenshots.
-                let window = content
-                    .windows()
-                    .iter()
-                    .filter(|w| {
-                        w.windowLayer() == 0
-                            && w.isOnScreen()
-                            && w.owningApplication().is_some_and(|a| a.applicationName().to_string() == opts.target)
-                    })
-                    .max_by(|a, b| {
-                        let (fa, fb) = (a.frame(), b.frame());
-                        (fa.size.width * fa.size.height).total_cmp(&(fb.size.width * fb.size.height))
-                    })
-                    .ok_or_else(|| format!("No open window found for \"{}\".", opts.target))?;
+                // The app's largest window, found by its window number: the picker's app names
+                // come from the window list, and the recorder may name the app differently.
+                let missing = || format!("No open window found for \"{}\".", opts.target);
+                let id = crate::capture::largest_window_id(&opts.target).ok_or_else(missing)?;
+                let window = content.windows().iter().find(|w| w.windowID() == id).ok_or_else(missing)?;
                 SCContentFilter::initWithDesktopIndependentWindow(SCContentFilter::alloc(), &window)
             }
         };

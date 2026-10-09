@@ -135,12 +135,22 @@ fn full_scale() -> u32 {
     100
 }
 
-pub fn take(opts: &ShotOptions) -> Result<String, String> {
-    // The app's largest window, when it has several.
-    let window = windows()
+/// The app's largest window, by the name the window list shows (the picker's names).
+fn largest_window(app_name: &str) -> Option<WindowInfo> {
+    windows()
         .into_iter()
-        .filter(|w| w.owner == opts.app_name)
+        .filter(|w| w.owner == app_name)
         .max_by(|a, b| (a.width * a.height).total_cmp(&(b.width * b.height)))
+}
+
+/// Window number of the app's largest window. The recorder finds its window by this number:
+/// the Mac's recorder can name an app differently ("Code" for "Visual Studio Code").
+pub fn largest_window_id(app_name: &str) -> Option<u32> {
+    largest_window(app_name).map(|w| w.id)
+}
+
+pub fn take(opts: &ShotOptions) -> Result<String, String> {
+    let window = largest_window(&opts.app_name)
         .ok_or_else(|| format!("No open window found for \"{}\". Make sure the app is open and visible.", opts.app_name))?;
 
     let dir = expand_home(&opts.output_dir);
