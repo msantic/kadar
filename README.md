@@ -50,4 +50,4 @@ Mac-specific code lives in `macos.rs`, `recorder.rs` and `capture.rs`.
 
 **Local files in the window** are served as `viewer-file://viewer/<path>` (with byte ranges for video).
 
-**Signing.** Release builds are signed with the Prelako Developer ID (`src-tauri/tauri.conf.json`). A stable signature keeps the Screen Recording and microphone permissions across rebuilds. Not notarized yet; other Macs will warn on first open.
+**Signing.** Release builds are signed with the Prelako Developer ID (`src-tauri/tauri.conf.json`). A stable signature keeps the Screen Recording and microphone permissions across rebuilds. `scripts/notarize.sh` makes a notarized installer to share (see docs/development.md).

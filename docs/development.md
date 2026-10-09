@@ -100,7 +100,25 @@ ditto src-tauri/target/release/bundle/macos/Kadar.app /Applications/Kadar.app
   Do not change either, or every user must allow Kadar again.
 - `Entitlements.plist` allows audio input under the hardened runtime. `Info.plist` holds the
   texts that macOS shows when it asks for the microphone and for Apple Events.
-- The app is not notarized. Other Macs warn on the first open (right-click › Open works).
+- `npm run build` alone gives an app that is signed but not notarized. Other Macs block it until
+  the user clicks "Open Anyway" in System Settings › Privacy & Security.
+
+## Share Kadar
+
+`scripts/notarize.sh` (after `npm run build`) sends the app to Apple's notary service, staples the
+approval to it, makes a disk image with an Applications link, and notarizes and staples that too.
+The result opens on any Mac with Apple Silicon and macOS 15 or later, without a warning:
+`src-tauri/target/release/bundle/share/Kadar-<version>.dmg`.
+
+The script reads the notary login from the keychain profile `kadar-notary`. Make it once per Mac
+with an app-specific password of the Apple ID in the Prelako team (appleid.apple.com › Sign-In
+and Security › App-Specific Passwords):
+
+```bash
+xcrun notarytool store-credentials kadar-notary --apple-id <apple id> --team-id FC2M54RD3H
+```
+
+Raise `version` in `tauri.conf.json` before you share a new build, so people can tell builds apart.
 
 ## ffmpeg
 

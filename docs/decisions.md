@@ -154,7 +154,7 @@ A tiny result rounded to "100% smaller", which reads as an empty file. The figur
 
 ## Build and release
 
-### Signed with the Prelako Developer ID; not notarized yet (2026-10-08)
+### Signed with the Prelako Developer ID; notarized to share (2026-10-08, notarized 2026-10-09)
 
 macOS ties the Screen Recording and microphone permissions to the signature. A stable signature
 keeps them across rebuilds. Do not change the identity or the app id.
