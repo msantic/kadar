@@ -121,11 +121,30 @@ Screenshot, Record and Linux come after it. Code written for the first step must
 6. **Screenshot** on Windows, then Linux.
 7. **Record** on Windows, then Linux.
 
+### Build machines (office server)
+
+Builds for Windows and Linux run on the office server (`10.10.10.4`, Ubuntu 24.04), all driven
+from the Mac over SSH, as the BIMTLY Showroom does. Its runbook is
+`~/dev/bimtly/devops/conf/office/vm/README.md` (the `bimtly` repo).
+
+- **Windows: the existing `winbuild` machine.** Windows 11 in a virtual machine on the office
+  server, reached as `ssh marko@10.10.10.4`, then `ssh build@192.168.122.12` (PowerShell). It has
+  Git, Node 22, Python, Visual Studio 2022 Build Tools with the Windows SDK, and WebView2. Kadar
+  needs only Rust added (rustup, MSVC). The machine runs on demand: `make start` / `make stop` in
+  its role folder on the server, because it shares the server with production work.
+- **Linux: a new small virtual machine** (Ubuntu 24.04 desktop, no graphics card), made with the
+  same tools as `winbuild`. Not on the server itself: the server runs production, and its package
+  setup already has a known conflict.
+- **From the Mac:** one script sends the work to the machine (the pushed commit from GitHub, or a
+  git bundle for work that is not pushed, as the Showroom runbook describes), runs
+  `npm run check` and the build there, and copies the installer back.
+- **The Windows video tool:** the small ffmpeg must be built for Windows once; cross-built on the
+  Linux machine, or built on `winbuild` with MSYS2. Decide when the Windows step starts.
+
 ### Open questions for the owner
 
 - Windows signing: a yearly certificate, or Microsoft's signing service, or none at first
   (Windows then shows an "unknown publisher" warning).
 - Photoshop files on Windows and Linux: skip them, or add a small PSD reader.
 - Which Linux systems to test: Ubuntu only, or also Fedora.
-- A Windows PC or a Windows virtual machine for hands-on tests, besides the build machines.
 
