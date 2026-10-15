@@ -130,6 +130,8 @@ grid render ─► ThumbLoader.request() ─(1 rAF batch)─► thumb_request(re
   `mtimeMs`, `createdMs`. Symlinks are followed. Sorting in Rust is by name only; the window
   re-sorts.
 - `watch_folder` replaces the previous watcher. Dropping the watcher ends the debounce thread.
+  `FolderWatch::watch` takes a report function, so its checks run without the app. On the Mac,
+  changes inside a subfolder are not reported; Windows reports them as a change of the subfolder.
 - `taken_dates(files)` returns dates in the same order. Misses are read on all cores from the EXIF
   header (`DateTimeOriginal`, then `DateTimeDigitized`, read as local time). iCloud "dataless"
   files are skipped so they do not download. Cache: `date-taken-cache.json`, keyed by path, valid
@@ -267,6 +269,7 @@ later caller. One bad image could stop all thumbnails until restart. The data un
 | `viewer/selection.ts` | Finder-style selection and the actions on it: copy, trash, export, optimize, open |
 | `viewer/undo.ts` | ⌘Z stack (50 steps, in memory): trash → put back, rename → rename back |
 | `viewer/sort.ts`, `filter.ts` | Pure sort (name, taken, modified, created, size, kind; ties by name) and name filter (all words, accents ignored) |
+| `viewer/refresh.ts` | Pure folder-refresh rules: skip the redraw when files and subfolders are unchanged; where the open big view goes |
 | `viewer/grid/grid.ts` | Virtual grid: cell pool, keys, click/shift/cmd selection, rename in place, drag-out, context menu |
 | `viewer/grid/grid-layout.ts` | Pure layout math: columns, cell size (+24 px label), row height; zoom 80–320, default 160 |
 | `viewer/grid/grid-cell.ts` | One reusable cell element |

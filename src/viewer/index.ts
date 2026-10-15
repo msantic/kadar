@@ -14,6 +14,7 @@ import { undoLast } from './undo'
 import { defaultDescending, SORT_LABELS, sortEntries, type SortBy } from './sort'
 import type { FileEntry } from './types'
 import { filterEntries } from './filter'
+import { bigViewIndex, sameListing } from './refresh'
 import { getState, setState, subscribe } from './store'
 import { createSidebar } from './sidebar/sidebar'
 import { createGrid } from './grid/grid'
@@ -480,12 +481,7 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     const state = getState()
     if (state.currentFolder !== dirPath) return
     // Nothing changed that the grid shows: skip, so the view does not redraw for nothing.
-    const old = new Map(allFiles.map((e) => [e.path, e]))
-    const folderKey = (list: { path: string }[]): string => list.map((f) => f.path).sort().join('\n')
-    const sameFolders = folderKey(listing.folders) === folderKey(allFolders)
-    const same = sameFolders && listing.files.length === allFiles.length
-      && listing.files.every((f) => old.get(f.path)?.mtimeMs === f.mtimeMs && old.get(f.path)?.size === f.size)
-    if (same) return
+    if (sameListing(allFiles, allFolders, listing)) return
 
     await ensureTaken(listing.files)
     if (getState().currentFolder !== dirPath) return
@@ -495,10 +491,9 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     // Selected files may be gone; the open big view follows its image to its new place.
     setState({ entries: next, folders: listing.folders, truncated: listing.truncated })
     restoreSelection([...state.selection], state.selectedPath, state.anchorPath)
-    const selected = getState().selectedPath
-    const bigViewIndex = state.lightboxIndex !== null && selected ? next.findIndex((e) => e.path === selected) : null
     if (state.lightboxIndex !== null) {
-      if (bigViewIndex !== null && bigViewIndex >= 0) setState({ lightboxIndex: bigViewIndex })
+      const index = bigViewIndex(next, getState().selectedPath)
+      if (index !== null) setState({ lightboxIndex: index })
       else emit('lightbox:close', undefined)
     }
     showCount()

@@ -266,7 +266,10 @@ pub fn open_default(path: String) -> String {
 /// Starts watching the shown folder for changes; replaces any earlier watch.
 #[tauri::command]
 pub fn watch_folder(app: AppHandle, watch: State<'_, FolderWatch>, path: String) {
-    watch.watch(app, path);
+    use tauri::Emitter;
+    watch.watch(path, move |dir| {
+        let _ = app.emit("viewer:fs:changed", serde_json::json!({ "dirPath": dir }));
+    });
 }
 
 /// Asks for thumbnails of a batch of files. Returns the cached ones now; the rest arrive as
