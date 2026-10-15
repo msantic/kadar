@@ -17,14 +17,15 @@ pub struct FolderWatch(Mutex<Option<RecommendedWatcher>>);
 
 impl FolderWatch {
     /// Watches `dir` (not its subfolders) in place of any earlier folder. After changes stop for
-    /// 200 ms, calls `report(dir)` once. A folder that cannot be watched is silently left unwatched.
+    /// 200 ms, calls `report(dir)` once. An error from the system also counts as a change: it
+    /// usually means changes were lost (too many at once), and the page then lists the folder
+    /// again. A folder that cannot be watched is left unwatched; the page also lists the folder
+    /// again when its window comes to the front, which covers that case.
     pub fn watch(&self, dir: String, report: impl Fn(&str) + Send + 'static) {
         crate::sync::lock(&self.0).take();
         let (tx, rx) = mpsc::channel::<()>();
-        let Ok(mut watcher) = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-            if res.is_ok() {
-                let _ = tx.send(());
-            }
+        let Ok(mut watcher) = notify::recommended_watcher(move |_: notify::Result<notify::Event>| {
+            let _ = tx.send(());
         }) else {
             return;
         };
@@ -158,6 +159,24 @@ mod tests {
         assert!(reports(&rx_first).is_empty());
         fs::write(second.join("a.jpg"), b"x").unwrap();
         assert_eq!(reports(&rx_second), vec![second.to_string_lossy().into_owned()]);
+    }
+
+    #[test]
+    fn deleting_or_renaming_the_watched_folder_is_reported() {
+        let parent = folder("gone");
+        let dir = parent.join("open");
+        fs::create_dir(&dir).unwrap();
+        fs::write(dir.join("a.jpg"), b"x").unwrap();
+        let w = FolderWatch::default();
+        let rx = watch(&w, &dir);
+        fs::rename(&dir, parent.join("renamed")).unwrap();
+        assert!(!reports(&rx).is_empty(), "renamed");
+
+        let dir = parent.join("open2");
+        fs::create_dir(&dir).unwrap();
+        let rx = watch(&w, &dir);
+        fs::remove_dir(&dir).unwrap();
+        assert!(!reports(&rx).is_empty(), "deleted");
     }
 
     #[test]

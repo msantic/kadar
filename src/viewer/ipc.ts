@@ -7,13 +7,18 @@ import { system } from '../platform'
 /** The `window.viewer` object, backed by Rust commands. Read once, when this file loads. */
 export const api: ViewerAPI = window.viewer
 
-/** A `viewer-file://` URL for a local file, for `<img>` and `<video>` sources. */
-export function fileUrl(absPath: string): string {
+/**
+ * A `viewer-file://` URL for a local file, for `<img>` and `<video>` sources. Pass the file's
+ * `version` (see `fileVersion`) when the file can change on disk: a new version is a new URL, so
+ * WebKit does not show its stored copy of the old picture. Rust reads only the path.
+ */
+export function fileUrl(absPath: string, version?: string): string {
   // Use our custom viewer-file:// scheme, served by protocol.rs. file:// won't
   // load in windows served from http:// (dev server).
   // Windows paths ("C:\a\b.jpg") travel as "/C:/a/b.jpg"; Rust turns them back.
   const path = absPath.replace(/\\/g, '/')
   const encoded = (path.startsWith('/') ? path : `/${path}`).split('/').map((seg) => encodeURIComponent(seg)).join('/')
   // WebView2 (Windows) reaches custom schemes only as http://<scheme>.localhost.
-  return system === 'windows' ? `http://viewer-file.localhost${encoded}` : `viewer-file://viewer${encoded}`
+  const query = version ? `?v=${encodeURIComponent(version)}` : ''
+  return (system === 'windows' ? `http://viewer-file.localhost${encoded}` : `viewer-file://viewer${encoded}`) + query
 }

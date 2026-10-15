@@ -3,6 +3,8 @@
 
 import type { FileEntry } from '../types'
 import { fileUrl } from '../ipc'
+import { fileVersion } from '../refresh'
+import type { ThumbFile } from './thumb-loader'
 
 /** A tile's elements and the file it shows now. `index` is -1 and `entry` null until assigned. */
 export interface CellHandle {
@@ -41,8 +43,13 @@ export function createCell(): CellHandle {
   return { root, img, label, badge, index: -1, entry: null }
 }
 
-/** Shows `entry` in the tile. `cachedUrl` is the thumbnail file path; null clears the picture. */
+/**
+ * Shows `entry` in the tile. `cachedUrl` is the thumbnail file path; null clears the picture,
+ * except for a newer version of the file the tile already shows: its old picture stays until the
+ * new thumbnail arrives, so an edited photo does not blink empty.
+ */
 export function assignCell(cell: CellHandle, entry: FileEntry, index: number, cachedUrl: string | null): void {
+  const sameFile = cell.entry?.path === entry.path
   cell.index = index
   cell.entry = entry
   cell.label.textContent = entry.name
@@ -52,17 +59,29 @@ export function assignCell(cell: CellHandle, entry: FileEntry, index: number, ca
   if (cachedUrl) {
     cell.img.src = fileUrl(cachedUrl)
     cell.img.classList.add('loaded')
-  } else {
+  } else if (!sameFile) {
     cell.img.removeAttribute('src')
     cell.img.classList.remove('loaded')
   }
 }
 
-/** Sets the thumbnail when it arrives. Does nothing if the tile shows another file by now. */
-export function setCellThumb(cell: CellHandle, srcPath: string, cachePath: string): void {
-  if (!cell.entry || cell.entry.path !== srcPath) return
+/** True when the tile shows this very version of the file. */
+const shows = (cell: CellHandle, file: ThumbFile): boolean =>
+  cell.entry !== null && cell.entry.path === file.path && fileVersion(cell.entry) === file.version
+
+/** Sets the thumbnail when it arrives. Does nothing if the tile shows another file, or another version of it, by now. */
+export function setCellThumb(cell: CellHandle, file: ThumbFile, cachePath: string): void {
+  if (!shows(cell, file)) return
   cell.img.src = fileUrl(cachePath)
   cell.img.classList.add('loaded')
+}
+
+/** No thumbnail can be made for this version of the file: clear the tile's picture, so an
+ *  edited photo does not keep showing its old version. Does nothing for another file or version. */
+export function clearCellThumb(cell: CellHandle, file: ThumbFile): void {
+  if (!shows(cell, file)) return
+  cell.img.removeAttribute('src')
+  cell.img.classList.remove('loaded')
 }
 
 /** Places and sizes the tile, in px, with a CSS transform. */

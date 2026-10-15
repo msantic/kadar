@@ -34,12 +34,14 @@ pub struct FileEntry {
 }
 
 /// What a folder holds. `truncated` is true when the folder had more than 50,000 entries and
-/// the rest were left out.
+/// the rest were left out. `missing` is true when the folder is gone (deleted, renamed, or its
+/// disk unplugged), so the window can leave it instead of showing an empty grid.
 #[derive(Serialize)]
 pub struct FolderListing {
     pub folders: Vec<FolderEntry>,
     pub files: Vec<FileEntry>,
     pub truncated: bool,
+    pub missing: bool,
 }
 
 fn ms(time: std::io::Result<std::time::SystemTime>) -> f64 {
@@ -55,14 +57,15 @@ pub fn mtime_ms(meta: &fs::Metadata) -> f64 {
 }
 
 /// Subfolders and supported files of `dir`, both sorted by name. A folder that cannot be read
-/// gives an empty listing, not an error.
+/// gives an empty listing, not an error; `missing` says whether it is gone.
 pub fn list_folder(dir: &str) -> FolderListing {
     let mut folders = Vec::new();
     let mut files = Vec::new();
     let mut truncated = false;
 
     let Ok(read) = fs::read_dir(dir) else {
-        return FolderListing { folders, files, truncated };
+        let missing = !Path::new(dir).is_dir();
+        return FolderListing { folders, files, truncated, missing };
     };
 
     for entry in read.flatten() {
@@ -98,7 +101,7 @@ pub fn list_folder(dir: &str) -> FolderListing {
 
     folders.sort_by(|a, b| natural_cmp(&a.name, &b.name));
     files.sort_by(|a, b| natural_cmp(&a.name, &b.name));
-    FolderListing { folders, files, truncated }
+    FolderListing { folders, files, truncated, missing: false }
 }
 
 /// Only the subfolders of `dir`, sorted by name, for the sidebar's folder tree. Empty when the
@@ -193,6 +196,22 @@ mod tests {
         assert_eq!(l.folders.len(), 1);
         assert_eq!(l.files[1].kind, crate::formats::Kind::Video);
         assert!(!l.truncated);
+        assert!(!l.missing);
+    }
+
+    #[test]
+    fn a_folder_that_is_gone_is_reported_as_missing() {
+        let dir = crate::testutil::temp_dir("listing-gone");
+        let open = dir.join("open");
+        std::fs::create_dir(&open).unwrap();
+        std::fs::write(open.join("a.jpg"), b"x").unwrap();
+        let path = open.to_string_lossy().into_owned();
+        assert!(!super::list_folder(&path).missing);
+        std::fs::rename(&open, dir.join("renamed")).unwrap();
+        let gone = super::list_folder(&path);
+        assert!(gone.missing && gone.files.is_empty(), "renamed away");
+        std::fs::write(&open, b"now a file").unwrap();
+        assert!(super::list_folder(&path).missing, "a file in its place is not the folder");
     }
 
     #[test]

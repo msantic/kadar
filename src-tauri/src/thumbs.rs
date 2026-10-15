@@ -23,13 +23,17 @@ const TARGET_BYTES: u64 = 800 * 1024 * 1024;
 const PIXEL_RATIO: u32 = 2;
 
 /// One file the page wants a thumbnail for. The modified time (ms) and size (bytes) are part of
-/// the cache key, so a changed file gets a new thumbnail.
+/// the cache key, so a changed file gets a new thumbnail. `version` is the page's own label for
+/// this version of the file; it comes back unchanged with the result. (The page cannot compare
+/// the times it gets back: a decimal number can change in its last digit on the way.)
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileInfo {
     pub src_path: String,
     pub mtime_ms: f64,
     pub size: u64,
+    #[serde(default)]
+    pub version: String,
 }
 
 /// Answer to a batch: `cached` maps source path → cache file for thumbnails that exist now;
@@ -43,6 +47,8 @@ pub struct RequestResult {
 struct Job {
     request_id: String,
     src: String,
+    /// The page's label for the file version it asked for; sent back with the result.
+    version: String,
     kind: Kind,
     target: PathBuf,
     max_px: u32,
@@ -87,7 +93,9 @@ impl ThumbService {
     }
 
     /// Returns cached thumbnails at once and queues the rest, newest request first. Each queued
-    /// file then sends "viewer:thumb:ready" or "viewer:thumb:error". `target_size` is in CSS px; thumbnails are made at twice that.
+    /// file then sends "viewer:thumb:ready" or "viewer:thumb:error", with the file's `version`
+    /// from the request, so the page can tell which version of an edited file the thumbnail
+    /// shows. `target_size` is in CSS px; thumbnails are made at twice that.
     pub fn request(&self, request_id: String, files: Vec<FileInfo>, target_size: u32) -> RequestResult {
         let mut cached = HashMap::new();
         let mut jobs = Vec::new();
@@ -108,6 +116,7 @@ impl ThumbService {
             jobs.push(Job {
                 request_id: request_id.clone(),
                 src: f.src_path,
+                version: f.version,
                 kind,
                 target: base,
                 max_px: target_size * PIXEL_RATIO,
@@ -182,13 +191,13 @@ fn worker_loop(shared: &Shared) {
             Ok(path) => {
                 let _ = shared.app.emit(
                     "viewer:thumb:ready",
-                    json!({ "requestId": job.request_id, "srcPath": job.src, "cachePath": path }),
+                    json!({ "requestId": job.request_id, "srcPath": job.src, "version": job.version, "cachePath": path }),
                 );
             }
             Err(message) => {
                 let _ = shared.app.emit(
                     "viewer:thumb:error",
-                    json!({ "requestId": job.request_id, "srcPath": job.src, "message": message }),
+                    json!({ "requestId": job.request_id, "srcPath": job.src, "version": job.version, "message": message }),
                 );
             }
         }
@@ -255,6 +264,7 @@ mod tests {
         let job = Job {
             request_id: "r1".into(),
             src: src.to_string_lossy().into_owned(),
+            version: String::new(),
             kind: Kind::Image,
             target: dir.join("ab").join("abcdef"),
             max_px: 100,

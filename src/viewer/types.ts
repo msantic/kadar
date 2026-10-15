@@ -23,11 +23,15 @@ export interface FileEntry {
   takenMs?: number | null
 }
 
-/** A folder's contents. Hidden and unsupported files are left out. `truncated`: stopped at 50,000 items. */
+/**
+ * A folder's contents. Hidden and unsupported files are left out. `truncated`: stopped at 50,000
+ * items. `missing`: the folder is gone (deleted, renamed, or its disk unplugged).
+ */
 export interface FolderListing {
   folders: FolderEntry[]
   files: FileEntry[]
   truncated: boolean
+  missing: boolean
 }
 
 /** A folder in the sidebar's Favorites. `label` is the shown name; `addedAt` is ms since 1970. */
@@ -111,12 +115,14 @@ export interface ViewerAPI {
   thumb: {
     request: (payload: {
       requestId: string
-      files: { srcPath: string; mtimeMs: number; size: number }[]
+      /** `version`: the window's label for this version of the file (`fileVersion`); it comes back with the result. */
+      files: { srcPath: string; mtimeMs: number; size: number; version: string }[]
       targetSize: number
     }) => Promise<{ cached: Record<string, string>; pending: string[] }>
     cancel: (requestId: string) => Promise<void>
-    onReady: (cb: (data: { requestId: string; srcPath: string; cachePath: string }) => void) => Unsubscribe
-    onError: (cb: (data: { requestId: string; srcPath: string; message: string }) => void) => Unsubscribe
+    /** A thumbnail is made. `version` is the label of the file version it was asked for. */
+    onReady: (cb: (data: { requestId: string; srcPath: string; version: string; cachePath: string }) => void) => Unsubscribe
+    onError: (cb: (data: { requestId: string; srcPath: string; version: string; message: string }) => void) => Unsubscribe
   }
   meta: {
     get: (filePath: string) => Promise<FileMetadata>

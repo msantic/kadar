@@ -14,7 +14,7 @@ import { undoLast } from './undo'
 import { defaultDescending, SORT_LABELS, sortEntries, type SortBy } from './sort'
 import type { FileEntry } from './types'
 import { filterEntries } from './filter'
-import { bigViewIndex, sameListing } from './refresh'
+import { bigViewAfterRefresh, nearestFolder, sameListing } from './refresh'
 import { getState, setState, subscribe } from './store'
 import { createSidebar } from './sidebar/sidebar'
 import { createGrid } from './grid/grid'
@@ -22,7 +22,7 @@ import { createLightbox } from './lightbox/lightbox'
 import { ZOOM_MIN, ZOOM_MAX, ZOOM_DEFAULT } from './grid/grid-layout'
 import { readStored, writeStored } from '../storage'
 import { commandKey } from '../platform'
-import { crumbs, parentOf } from '../paths'
+import { baseName, crumbs, parentOf } from '../paths'
 
 let initialized = false
 
@@ -209,6 +209,13 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
   layout.append(sidebar, main)
   panel.append(layout, lightbox.root, createExport())
 
+  // Each folder load and each refresh gets a number; only the latest one may change the grid, so a
+  // slow listing never replaces a newer one. A refresh waits for the load in progress.
+  // Declared before the first folder opens below.
+  let loadNo = 0
+  let refreshNo = 0
+  let loadDone: Promise<void> = Promise.resolve()
+
   // Folder history for Back and Forward (⌘[ and ⌘]), as in Finder.
   const backStack: string[] = []
   const forwardStack: string[] = []
@@ -359,17 +366,32 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     }
   }
 
-  async function loadFolder(dirPath: string): Promise<void> {
+  function loadFolder(dirPath: string): Promise<void> {
+    const done = load(dirPath)
+    loadDone = done.catch(() => {})
+    return done
+  }
+
+  async function load(dirPath: string): Promise<void> {
+    const mine = ++loadNo
+    refreshNo++
     setState({
       currentFolder: dirPath, entries: [], folders: [], truncated: false, loading: true,
       selectedPath: null, selection: new Set(), anchorPath: null,
     })
     drawPath(dirPath)
     countEl.textContent = 'Loading…'
+    // Watch first, then list: a change between the two is then never missed.
+    await api.fs.watch(dirPath).catch(() => {})
     const listing = await api.fs.listFolder(dirPath)
-    if (getState().currentFolder !== dirPath) return
+    if (mine !== loadNo) return
+    if (listing.missing) {
+      setState({ loading: false })
+      void leaveGoneFolder(dirPath)
+      return
+    }
     await ensureTaken(listing.files)
-    if (getState().currentFolder !== dirPath) return
+    if (mine !== loadNo) return
     allFiles = listing.files
     allFolders = folderTiles(listing.folders)
     setState({
@@ -379,7 +401,20 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
       loading: false,
     })
     showCount()
-    void api.fs.watch(dirPath)
+  }
+
+  /** The open folder is gone (deleted, renamed, disk unplugged): say so and open the nearest folder above it. */
+  async function leaveGoneFolder(gone: string): Promise<void> {
+    const target = await nearestFolder(gone, async (p) => (await api.fs.listFolder(p)).missing)
+    if (getState().currentFolder !== gone) return
+    emit('toast', { text: `“${baseName(gone)}” was moved or deleted.` })
+    if (target) void openFolder(target)
+    else {
+      allFiles = []
+      allFolders = []
+      setState({ entries: [], folders: [], truncated: false })
+      showCount()
+    }
   }
 
   function showCount(): void {
@@ -471,30 +506,46 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
   api.fs.onChanged(({ dirPath }) => {
     if (dirPath === getState().currentFolder) void refresh(dirPath)
   })
-  on('folder:refresh', () => {
+  const refreshOpen = (): void => {
     const folder = getState().currentFolder
     if (folder) void refresh(folder)
-  })
+  }
+  on('folder:refresh', refreshOpen)
+  // Coming back to Kadar also looks again: it catches changes the Mac did not report (a network
+  // share changed from another computer, a disk that cannot be watched). Cheap when nothing changed.
+  window.addEventListener('focus', refreshOpen)
 
   async function refresh(dirPath: string): Promise<void> {
+    await loadDone
+    if (getState().currentFolder !== dirPath) return
+    const mine = ++refreshNo
+    const current = (): boolean => mine === refreshNo && getState().currentFolder === dirPath
     const listing = await api.fs.listFolder(dirPath)
-    const state = getState()
-    if (state.currentFolder !== dirPath) return
+    if (!current()) return
+    if (listing.missing) {
+      void leaveGoneFolder(dirPath)
+      return
+    }
     // Nothing changed that the grid shows: skip, so the view does not redraw for nothing.
     if (sameListing(allFiles, allFolders, listing)) return
 
     await ensureTaken(listing.files)
-    if (getState().currentFolder !== dirPath) return
+    if (!current()) return
+    // Read the state only now (the selection may have changed while the listing loaded), and copy
+    // what is needed: setState changes the state object in place.
+    const { selection, selectedPath, anchorPath, entries, lightboxIndex } = getState()
+    const shown = lightboxIndex !== null ? entries[lightboxIndex] ?? null : null
     allFiles = listing.files
     allFolders = folderTiles(listing.folders)
     const next = view()
-    // Selected files may be gone; the open big view follows its image to its new place.
+    // Selected files may be gone; the open big view follows its file, and loads it again when it was edited.
     setState({ entries: next, folders: listing.folders, truncated: listing.truncated })
-    restoreSelection([...state.selection], state.selectedPath, state.anchorPath)
-    if (state.lightboxIndex !== null) {
-      const index = bigViewIndex(next, getState().selectedPath)
-      if (index !== null) setState({ lightboxIndex: index })
-      else emit('lightbox:close', undefined)
+    restoreSelection([...selection], selectedPath, anchorPath)
+    if (lightboxIndex !== null) {
+      const step = bigViewAfterRefresh(next, shown)
+      if (step.kind === 'close') emit('lightbox:close', undefined)
+      else if (step.kind === 'reload') emit('lightbox:open', { index: step.index })
+      else setState({ lightboxIndex: step.index })
     }
     showCount()
   }

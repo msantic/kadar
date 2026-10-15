@@ -77,7 +77,7 @@ Mac crates (objc2, libc, ...) are listed for macOS builds only in `Cargo.toml`.
 | `commands.rs` | Every command; put back, rename and meta live here directly; trash and opening go to `platform::system` | — | Tauri worker or main (see above) |
 | `formats.rs` | Image / video / unsupported by extension only; MIME types; which files need a preview | — | any |
 | `fs_scan.rs` | Folder listing (skips dot files, stops at 50,000 entries), tree children, Finder-style natural sort | std::fs | command thread |
-| `watch.rs` | Watches the open folder (not recursive), 200 ms quiet time, emits `viewer:fs:changed` | `notify` (FSEvents) | notify thread + one debounce thread |
+| `watch.rs` | Watches the open folder (not recursive), 200 ms quiet time, emits `viewer:fs:changed`; a system error (lost changes) also counts as a change | `notify` (FSEvents) | notify thread + one debounce thread |
 | `thumbs.rs` | Thumbnail queue, workers, disk cache, eviction | `platform::image`; `sha1_smol` | one worker per performance core + hourly sweep thread |
 | `taken.rs` | "Date Taken" from EXIF, cached in a JSON file | `platform::image` | scoped threads, one per core |
 | `favorites.rs` | Favorite folders, loaded lazily, saved atomically | serde_json, uuid | caller |
@@ -273,12 +273,12 @@ later caller. One bad image could stop all thumbnails until restart. The data un
 | `viewer/grid/grid.ts` | Virtual grid: cell pool, keys, click/shift/cmd selection, rename in place, drag-out, context menu |
 | `viewer/grid/grid-layout.ts` | Pure layout math: columns, cell size (+24 px label), row height; zoom 80–320, default 160 |
 | `viewer/grid/grid-cell.ts` | One reusable cell element |
-| `viewer/grid/thumb-loader.ts` | Batches thumbnail requests per animation frame; known cache paths; one request id per folder |
+| `viewer/grid/thumb-loader.ts` | Batches thumbnail requests per animation frame; known, asked and failed thumbnails per file version (path, mtime, size), so an edited file gets a new one. Rust returns the window's version label unchanged (a decimal time can change in its last digit on the way, so times are not compared); one request id per folder |
 | `viewer/lightbox/lightbox.ts` | Big view: fit / 100% / pinch zoom at pointer, pan, swipe, video, preload of neighbours |
 | `viewer/info/info.ts` | Info panel in the big view (file, camera, place, color) from `image_properties` |
 | `viewer/export/export.ts` | Export for Web UI: crop frame, settings, Result and Compare views, batch sheet |
 | `viewer/context-menu.ts` | Right-click menu, a native Tauri menu built once; each click only changes its labels. Tauri keeps every menu made until quit, so one per click grew without end |
-| `viewer/sidebar/*` | Favorites list and the Locations tree (Home, Pictures, Desktop, Downloads, Movies) |
+| `viewer/sidebar/*` | Favorites list and the Locations tree (Home, Pictures, Desktop, Downloads, Movies). The tree lists a folder again at each opening, and the grid's folder updates its subfolders there from the store's `folders` |
 | `viewer/ipc.ts`, `types.ts`, `testing.ts` | `api = window.viewer`, `fileUrl()`; shared types; test helper `entry()` |
 
 **Bus events** (`BusEvents`): `folder:request`, `folder:go`, `folder:refresh`, `lightbox:open`,
@@ -289,15 +289,22 @@ later caller. One bad image could stop all thumbnails until restart. The data un
 
 1. `folder:request` (tree, favorite, path bar, double-click) → `openFolder()` resets the session's
    place, selection and filter, then `loadFolder()`.
-2. `loadFolder` sets `currentFolder`, calls `list_folder`, reads Date Taken only if that sort is
-   active, then `setState({ entries: view() })`. Each `await` is followed by a "still the same
-   folder?" check, so a slow folder cannot overwrite a newer one.
+2. `loadFolder` sets `currentFolder`, starts `watch_folder` (before the listing, so no change
+   between the two is lost), calls `list_folder`, reads Date Taken only if that sort is active,
+   then `setState({ entries: view() })`. Each load and each refresh has a number; after each
+   `await` only the latest may go on, so a slow listing cannot overwrite a newer one. A listing
+   with `missing` (folder deleted, renamed, disk removed) shows a message and opens the nearest
+   folder above that exists (`nearestFolder`).
 3. `view()` = subfolder tiles (by name) + files sorted by the session sort, both through the filter.
 4. The grid's `subscribe` sees new `entries`, sets the canvas height, and renders only the visible
    rows plus 2 overscan rows, reusing pooled cells positioned with `transform`.
 5. Missing thumbnails go to `ThumbLoader.request()`; `viewer:thumb:ready` fills the cell.
-6. `watch_folder` starts; `viewer:fs:changed` → `refresh()` relists and skips the redraw when
-   nothing visible changed.
+6. `viewer:fs:changed`, and the window's `focus` (a safety net for changes the system did not
+   report), → `refresh()`: it waits for a load in progress, relists, and skips the redraw when no
+   file version (`fileVersion`: mtime + size) or subfolder changed. The open big view follows its
+   file, closes when it is gone, or opens it again when it was edited (`bigViewAfterRefresh`).
+   Big-view pictures load from `fileUrl(path, version)`, so WebKit never shows a stored old copy;
+   Rust ignores the `?v=` part.
 
 ### Selection model
 
@@ -395,7 +402,9 @@ not also handle — or make sure the window calls `preventDefault()`.
 - **Window:** `src/**/*.test.ts` with vitest in a jsdom page (`vitest.config.ts`); `testing.ts`
   has `entry()` for fake files. Files: `sort`, `filter`, `selection`, `undo`, `session` (damaged
   saves), `format` (sizes, "smaller by"), `grid/grid-layout`, `grid/thumb-loader` (with a fake
-  `ipc`), `info/info` (the panel with a fake `window.viewer`).
+  `ipc`), `grid/grid-cell`, `refresh`, `context-menu`, `lightbox/lightbox`, `sidebar/tree`,
+  `info/info` (the panel with a fake `window.viewer`), and `live-folder`: the whole viewer against
+  a folder in memory (new, deleted, edited files, slow listings, focus, a folder that is gone).
 - **Test media:** `src-tauri/tests/data/clip.mov` is a 1-second 320×240 H.264 + AAC clip (9 KB),
   made once with a full ffmpeg. The video checks run the bundled ffmpeg from `src-tauri/bin/`
   on it, so run `scripts/build-ffmpeg.sh` once before `cargo test` on a fresh clone.

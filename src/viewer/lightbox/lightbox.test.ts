@@ -1,5 +1,6 @@
 // Checks for the big view: closing it lets the window free the shown photo and the last video,
-// so a Kadar open for days does not keep a full-size picture or a video player alive.
+// so a Kadar open for days does not keep a full-size picture or a video player alive; and a file
+// edited on disk shows its new version, never the old stored picture.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { emit } from '../bus'
@@ -52,6 +53,26 @@ describe('big view', () => {
     expect(video().hasAttribute('src')).toBe(false)
     expect(load).toHaveBeenCalledTimes(1)
     expect(shownImage().getAttribute('src')).toContain('a.jpg')
+    emit('lightbox:close', undefined)
+  })
+
+  it('shows the new version of a photo edited on disk', () => {
+    emit('lightbox:open', { index: 0 })
+    const before = shownImage().getAttribute('src')
+    setState({ entries: [entry('a.jpg', { mtimeMs: 99 }), files[1]!] })
+    emit('lightbox:open', { index: 0 })
+    const after = shownImage().getAttribute('src')
+    expect(after).toContain('a.jpg')
+    expect(after).not.toBe(before)
+    emit('lightbox:close', undefined)
+  })
+
+  it('reloads a video edited on disk', () => {
+    emit('lightbox:open', { index: 1 })
+    const before = video().getAttribute('src')
+    setState({ entries: [files[0]!, entry('clip.mp4', { kind: 'video', size: 5 })] })
+    emit('lightbox:open', { index: 1 })
+    expect(video().getAttribute('src')).not.toBe(before)
     emit('lightbox:close', undefined)
   })
 })

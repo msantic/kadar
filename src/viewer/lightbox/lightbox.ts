@@ -4,6 +4,7 @@
 import { emit, on } from '../bus'
 import { getState, setState, subscribe } from '../store'
 import { fileUrl } from '../ipc'
+import { fileVersion } from '../refresh'
 import { updateSession } from '../session'
 import { copySelection, selectOnly } from '../selection'
 import type { FileEntry } from '../types'
@@ -76,8 +77,10 @@ export function createLightbox(): LightboxHandle {
   let fitted = true
   let current: FileEntry | null = null
 
-  // Decoded images by path: the shown one and its two neighbours.
+  // Decoded images by file URL, which holds the file's version: the shown one and its two
+  // neighbours. An edited file has a new URL, so its old picture is never shown again.
   const preloaded = new Map<string, HTMLImageElement>()
+  const urlOf = (entry: FileEntry): string => fileUrl(entry.path, fileVersion(entry))
 
   function makeImage(src?: string): HTMLImageElement {
     const el = document.createElement('img')
@@ -89,10 +92,11 @@ export function createLightbox(): LightboxHandle {
   }
 
   function imageFor(entry: FileEntry): HTMLImageElement {
-    let el = preloaded.get(entry.path)
+    const url = urlOf(entry)
+    let el = preloaded.get(url)
     if (!el) {
-      el = makeImage(fileUrl(entry.path))
-      preloaded.set(entry.path, el)
+      el = makeImage(url)
+      preloaded.set(url, el)
     }
     return el
   }
@@ -103,11 +107,11 @@ export function createLightbox(): LightboxHandle {
     for (const i of [index - 1, index, index + 1]) {
       const e = entries[i]
       if (!e || e.kind !== 'image') continue
-      keep.add(e.path)
+      keep.add(urlOf(e))
       const el = imageFor(e)
       if (i !== index) void el.decode().catch(() => {})
     }
-    for (const path of preloaded.keys()) if (!keep.has(path)) preloaded.delete(path)
+    for (const url of preloaded.keys()) if (!keep.has(url)) preloaded.delete(url)
   }
 
   // ─── Zoom and pan ──────────────────────────────────────────────────────────
@@ -289,7 +293,7 @@ export function createLightbox(): LightboxHandle {
     if (entry.kind === 'video') {
       img.hidden = true
       video.hidden = false
-      video.src = fileUrl(entry.path)
+      video.src = urlOf(entry)
       void video.play().catch(() => {})
     } else {
       video.pause()
@@ -364,8 +368,12 @@ export function createLightbox(): LightboxHandle {
 
   subscribe((s, prev) => {
     if (s.currentFolder !== prev.currentFolder) hide()
-    // The folder changed on disk and the shown image moved: keep the counter right.
-    else if (s.lightboxIndex !== prev.lightboxIndex && s.lightboxIndex !== null) drawCaption()
+    // The folder changed on disk and the shown file moved: keep the counter right. (An edited
+    // file is opened again instead, by the folder refresh.)
+    else if (s.lightboxIndex !== prev.lightboxIndex && s.lightboxIndex !== null && !root.hidden) {
+      current = s.entries[s.lightboxIndex] ?? current
+      drawCaption()
+    }
   })
 
   return { root }

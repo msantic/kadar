@@ -3,7 +3,7 @@
 // store; opens the big view and folders through the bus.
 
 import { computeLayout, totalHeight, ZOOM_DEFAULT, type GridLayout } from './grid-layout'
-import { createCell, assignCell, setCellThumb, positionCell, type CellHandle } from './grid-cell'
+import { createCell, assignCell, clearCellThumb, setCellThumb, positionCell, type CellHandle } from './grid-cell'
 import { ThumbLoader } from './thumb-loader'
 import { subscribe, getState } from '../store'
 import {
@@ -52,11 +52,10 @@ export function createGrid(): GridHandle {
   // scrollTop we set ourselves; the scroll event it causes must not move topIndex.
   let ownScrollTop: number | null = null
 
-  const loader = new ThumbLoader((srcPath, cachePath) => {
-    for (const cell of indexToCell.values()) {
-      if (cell.entry?.path === srcPath) setCellThumb(cell, srcPath, cachePath)
-    }
-  })
+  const loader = new ThumbLoader(
+    (file, cachePath) => { for (const cell of indexToCell.values()) setCellThumb(cell, file, cachePath) },
+    (file) => { for (const cell of indexToCell.values()) clearCellThumb(cell, file) },
+  )
 
   const ro = new ResizeObserver(() => relayout())
   ro.observe(root)
@@ -273,7 +272,7 @@ export function createGrid(): GridHandle {
     if (!getState().selection.has(entry.path)) selectOnly(cell.index)
     // The drag picture: the thumbnail, else the image itself, else a plain Mac icon.
     const icons = '/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/'
-    const icon = loader.getCached(entry.path)
+    const icon = loader.getCached(entry)
       ?? (entry.kind === 'image' ? entry.path : icons + (entry.kind === 'folder' ? 'GenericFolderIcon.icns' : 'GenericDocumentIcon.icns'))
     if (icon) void window.viewer.share.startDrag(selectedPaths(), icon).catch(() => {})
   })
@@ -364,12 +363,12 @@ export function createGrid(): GridHandle {
       }
       if (!cell) cell = recycleCell()
       const entry = entries[idx]!
-      assignCell(cell, entry, idx, loader.getCached(entry.path))
+      assignCell(cell, entry, idx, entry.kind === 'folder' ? null : loader.getCached(entry))
       markSelected(cell)
       cell.root.style.visibility = 'visible'
       placeCell(cell, idx)
       indexToCell.set(idx, cell)
-      if (entry.kind !== 'folder' && !loader.getCached(entry.path)) toRequest.push(entry)
+      if (entry.kind !== 'folder' && !loader.getCached(entry)) toRequest.push(entry)
     }
 
     if (toRequest.length > 0) loader.request(toRequest)

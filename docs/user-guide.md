@@ -144,7 +144,13 @@ You can also use **View › Sort By** in the menu bar.
 
 Each tile shows a thumbnail and the file name. A small label shows the file type, for example "JPG", or "VIDEO" for a video. Subfolder tiles have no label.
 
-The grid changes when the folder changes on disk. New files appear and deleted files go away. You do not have to open the folder again.
+The grid changes when the folder changes on disk. You do not have to open the folder again.
+
+- New files appear and deleted files go away.
+- An edited photo gets a new thumbnail. If the big view shows it, the big view shows the new version.
+- New, deleted and renamed subfolders also change in the Locations tree.
+- If the open folder is deleted, renamed or its disk is removed, a message says so. Kadar then opens the nearest folder above it.
+- Kadar also looks at the folder again when you come back to its window. This catches changes that macOS did not report, for example on a network drive.
 
 **Select files**
 
