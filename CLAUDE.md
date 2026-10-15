@@ -46,6 +46,8 @@ Then README.md, then the guides in `docs/`: [architecture](docs/architecture.md)
 - **loudnorm before AAC** needs `aresample=48000` after it. loudnorm outputs 192 kHz, and the AAC encoder rejects it.
 - **Files opened from Finder arrive before setup.** macOS sends them while the app still launches. Anything the open handler uses must be managed on the Builder, not in `setup()`, or the app aborts at launch.
 - **Dragging files out:** start the Mac drag from mouse movement, never from the page's `dragstart`. The page's own drag shares the Mac's drag clipboard and wipes the files, so every app refuses the drop. Allow only Copy: with Generic or Move, Finder moves the owner's file away.
+- **Never call into the window from a helper thread while holding a lock the main thread also takes.** Window getters (size, place) from another thread wait for the main thread. Saving the window place from a timer thread froze Kadar for good: run it with `run_on_main_thread`.
+- **Tauri menus made from the window are never freed.** Build a menu once and change its labels; do not make one per right-click.
 - **Changing the ffmpeg build flags:** bump `BUILD_ID` in `scripts/build-ffmpeg.sh`, or old copies stay in use.
 
 ## Checking the running app

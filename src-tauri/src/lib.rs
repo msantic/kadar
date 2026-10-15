@@ -21,8 +21,6 @@ mod thumbs;
 mod video;
 mod watch;
 
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use std::time::Duration;
 
 use tauri::{AppHandle, Manager, WindowEvent};
@@ -140,23 +138,24 @@ pub fn run() {
         });
 }
 
-/// The window-state add-on saves only on a normal quit. Also save half a second after each move
-/// or resize, so a crash or a forced quit keeps the window where it was.
+/// The window-state add-on saves only on a normal quit. Also save half a second after the last
+/// move or resize, so a crash or a forced quit keeps the window where it was.
 fn save_window_state_on_change(app: &AppHandle) {
     let Some(window) = app.get_webview_window("main") else { return };
-    let generation = Arc::new(AtomicU64::new(0));
-    let app = app.clone();
-    window.on_window_event(move |event| {
-        if !matches!(event, WindowEvent::Moved(_) | WindowEvent::Resized(_)) {
-            return;
-        }
-        let mine = generation.fetch_add(1, Ordering::SeqCst) + 1;
-        let (generation, app) = (generation.clone(), app.clone());
-        std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(500));
-            if generation.load(Ordering::SeqCst) == mine {
-                let _ = app.save_window_state(StateFlags::all());
-            }
+    let main = app.clone();
+    let save = crate::sync::after_quiet(Duration::from_millis(500), move || {
+        let app = main.clone();
+        // NOTE(lessons): save on the main thread only. Saving holds the add-on's lock and asks the
+        // main thread for the window's size; the main thread's own move/resize handler waits for
+        // that same lock. From another thread the two waited for each other and Kadar froze for
+        // good (a macOS hang report on 2026-10-15, after the Mac woke and the screens changed).
+        let _ = main.run_on_main_thread(move || {
+            let _ = app.save_window_state(StateFlags::all());
         });
+    });
+    window.on_window_event(move |event| {
+        if matches!(event, WindowEvent::Moved(_) | WindowEvent::Resized(_)) {
+            let _ = save.send(());
+        }
     });
 }

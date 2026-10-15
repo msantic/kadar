@@ -259,7 +259,11 @@ export function createLightbox(): LightboxHandle {
     if (root.hidden) return
     root.hidden = true
     video.pause()
+    // Without load(), the video's player and buffers stay alive after its src is gone.
     video.removeAttribute('src')
+    video.load()
+    // The shown photo is decoded at full size (about 200 MB for 50 MP); let WebKit free it.
+    img.removeAttribute('src')
     preloaded.clear()
     current = null
     setState({ lightboxIndex: null })
@@ -290,7 +294,10 @@ export function createLightbox(): LightboxHandle {
     } else {
       video.pause()
       video.hidden = true
-      video.removeAttribute('src')
+      if (video.hasAttribute('src')) {
+        video.removeAttribute('src')
+        video.load()
+      }
       const next = imageFor(entry)
       if (next !== img) {
         img.replaceWith(next)

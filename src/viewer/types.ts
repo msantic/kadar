@@ -140,7 +140,7 @@ export interface ViewerAPI {
     exportReference: (path: string, options: ExportOptions) => Promise<ExportResult>
     /** Many images with the same settings; a newer `run` stops an older one. */
     exportBatch: (paths: string[], options: ExportOptions, run: number) => Promise<BatchItem[]>
-    /** Stops the running batch at its next image; finished results stay. */
+    /** Export for Web closes: stops a running batch at its next image and frees the decoded photo. */
     exportStop: () => Promise<void>
     onExportProgress: (cb: (p: { run: number; done: number; total: number }) => void) => Unsubscribe
     exportCopyMany: (results: string[]) => Promise<void>

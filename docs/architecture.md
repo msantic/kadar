@@ -73,7 +73,7 @@ Mac crates (objc2, libc, ...) are listed for macOS builds only in `Cargo.toml`.
 | File | Job | Mac framework / crate | Threads |
 |---|---|---|---|
 | `main.rs` | Calls `kadar_lib::run()` | — | main |
-| `lib.rs` | Builds the app: plugins, `viewer-file` scheme, menu, managed state, command list; handles `RunEvent::Opened`; saves window state on move/resize | tauri, `tauri-plugin-window-state`, `tauri-plugin-dialog` | main; one short thread per move/resize (500 ms debounce) |
+| `lib.rs` | Builds the app: plugins, `viewer-file` scheme, menu, managed state, command list; handles `RunEvent::Opened`; saves window state on move/resize | tauri, `tauri-plugin-window-state`, `tauri-plugin-dialog` | main; one thread waits 500 ms after the last move/resize, then saves on the main thread |
 | `commands.rs` | Every command; put back, rename and meta live here directly; trash and opening go to `platform::system` | — | Tauri worker or main (see above) |
 | `formats.rs` | Image / video / unsupported by extension only; MIME types; which files need a preview | — | any |
 | `fs_scan.rs` | Folder listing (skips dot files, stops at 50,000 entries), tree children, Finder-style natural sort | std::fs | command thread |
@@ -151,7 +151,8 @@ cache above. Video uses `<video>` with range requests.
 
 - `export_image`: rotate (quarter turns), crop (fractions of the rotated image), scale to a max
   width (never up), encode WebP / JPG (quality 1–100) / PNG (oxipng level 2). The decoded source
-  stays in a one-slot cache (`LAST`) while settings change. Result goes to
+  stays in a one-slot cache (`LAST`) while settings change; `export_stop` (sent when Export closes)
+  frees it. Result goes to
   `<app cache>/export/<nanos>/<slug>.<ext>`; the folder is emptied each run so WebKit never shows a
   stale cached file.
 - `export_reference`: same pixels, PNG level 0, into `export-reference/` — the "Original" side of
@@ -235,7 +236,10 @@ when asked. `capture_resize_window` moves and sizes the app's front window with 
 - **Open folders:** a third file association claims `public.folder` (rank Alternate), so Kadar
   shows in Finder's Open With for folders and takes folders dropped on its Dock icon.
 - **Window state:** `tauri-plugin-window-state` restores size and place. It saves only on a normal
-  quit, so `lib.rs` also saves 500 ms after the last move/resize.
+  quit, so `lib.rs` also saves 500 ms after the last move/resize (`sync::after_quiet`). The save
+  must run on the main thread: it holds the add-on's lock and asks the main thread for the window
+  size, while the add-on's own move/resize handler on the main thread waits for that lock. From
+  another thread the two waited for each other and Kadar froze for good (2026-10-15).
 
 ### Lock handling (`sync.rs`)
 
@@ -270,7 +274,7 @@ later caller. One bad image could stop all thumbnails until restart. The data un
 | `viewer/lightbox/lightbox.ts` | Big view: fit / 100% / pinch zoom at pointer, pan, swipe, video, preload of neighbours |
 | `viewer/info/info.ts` | Info panel in the big view (file, camera, place, color) from `image_properties` |
 | `viewer/export/export.ts` | Export for Web UI: crop frame, settings, Result and Compare views, batch sheet |
-| `viewer/context-menu.ts` | Right-click menu, a native Tauri menu built per click |
+| `viewer/context-menu.ts` | Right-click menu, a native Tauri menu built once; each click only changes its labels. Tauri keeps every menu made until quit, so one per click grew without end |
 | `viewer/sidebar/*` | Favorites list and the Locations tree (Home, Pictures, Desktop, Downloads, Movies) |
 | `viewer/ipc.ts`, `types.ts`, `testing.ts` | `api = window.viewer`, `fileUrl()`; shared types; test helper `entry()` |
 

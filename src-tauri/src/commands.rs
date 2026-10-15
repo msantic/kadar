@@ -143,10 +143,12 @@ pub fn export_image(app: AppHandle, path: String, options: crate::export::Export
     crate::export::export(&path, &options, &dir)
 }
 
-/// Stops the running batch export at its next file; finished results stay.
+/// Export for Web closes: stops a running batch at its next file (finished results stay) and
+/// frees the decoded photo.
 #[tauri::command]
 pub fn export_stop() {
     crate::export::stop_batch();
+    crate::export::forget_decoded();
 }
 
 /// Exports many images with the same settings. Reports "export-progress" { run, done, total }.

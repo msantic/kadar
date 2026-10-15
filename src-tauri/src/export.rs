@@ -195,6 +195,12 @@ pub fn export_reference(path: &str, opts: &ExportOptions, dir: &Path) -> Result<
 /// The latest batch run; an older run stops at its next file. 0 means "none": a stop request.
 static BATCH_RUN: AtomicU64 = AtomicU64::new(0);
 
+/// Frees the decoded photo kept for setting changes. A 50 MP photo holds about 200 MB; without
+/// this it stayed in memory until the next export, for as long as Kadar ran.
+pub fn forget_decoded() {
+    crate::sync::lock(&LAST).take();
+}
+
 /// Stops the running batch at its next file, for example when Export for Web closes.
 pub fn stop_batch() {
     BATCH_RUN.store(0, Ordering::SeqCst);
@@ -314,6 +320,18 @@ mod tests {
         assert_eq!(r.width, 400, "never scales up");
         assert!(std::path::Path::new(&r.path).is_file());
         assert_eq!(std::fs::metadata(&r.path).unwrap().len(), r.bytes);
+    }
+
+    #[test]
+    fn closing_export_frees_the_decoded_photo() {
+        let dir = crate::testutil::temp_dir("export-forget");
+        let src = dir.join("photo.png");
+        crate::testutil::write_png(&src, 40, 30);
+        let path = src.to_string_lossy().into_owned();
+        drop(super::decoded(&path).unwrap());
+        super::forget_decoded();
+        // Other checks may decode their own photos at the same time; this one must be gone.
+        assert!(!crate::sync::lock(&super::LAST).as_ref().is_some_and(|d| d.path == path));
     }
 
     #[test]

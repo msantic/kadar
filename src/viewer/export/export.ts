@@ -515,8 +515,9 @@ export function createExport(): HTMLElement {
   }, { capture: true })
 
   function close(): void {
-    // A batch still at work stops at its next image; there is no one left to show it to.
-    if (batchRunning) void window.viewer.share.exportStop()
+    // A batch still at work stops at its next image; there is no one left to show it to. Rust
+    // also frees the decoded photo it keeps for setting changes (up to about 200 MB).
+    void window.viewer.share.exportStop()
     batchRunning = false
     root.hidden = true
     exportOpen = false
