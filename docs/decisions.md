@@ -145,6 +145,13 @@ A menu key such as ⌘⌫ pressed in the Optimize, Record or Screenshot tab only
 to the front; it does not act on the files. While Export for Web is open, the Viewer's menu
 commands do nothing. Both stop a key press from changing files the user does not see.
 
+### Rotate turns the orientation tag, not the pixels (2026-10-16)
+
+Rotate Left and Right (⌘L, ⌘R, as in Preview) change the photo on disk. They change only its
+EXIF orientation tag and copy the picture data unchanged, so a photo never loses quality, however
+often it turns. Only JPEG, HEIC/HEIF and TIFF qualify; other types get a message instead of a
+lossy re-encode. ⌘R was Show in Finder; that moved to ⇧⌘R (owner's choice).
+
 ### The window reads only images and videos (2026-10-09)
 
 The window can ask Rust for a file only through Kadar's own file link, and that link serves only

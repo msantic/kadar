@@ -15,4 +15,4 @@ pub mod recorder;
 pub mod system;
 
 /// Everything works on the Mac.
-pub const FEATURES: crate::platform::Features = crate::platform::Features { system: "mac", screenshot: true, record: true };
+pub const FEATURES: crate::platform::Features = crate::platform::Features { system: "mac", screenshot: true, record: true, rotate: true };

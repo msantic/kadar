@@ -6,8 +6,8 @@ import { api } from './ipc'
 import { emit, on } from './bus'
 import { getSession, updateSession } from './session'
 import {
-  copySelection, exportSelection, openSelectionDefault, optimizeSelection, restoreSelection, selectedPaths, selectOnly,
-  selectAll, trashSelection,
+  copySelection, exportSelection, openSelectionDefault, optimizeSelection, restoreSelection, rotateSelection, selectedPaths,
+  selectOnly, selectAll, trashSelection,
 } from './selection'
 import { createExport, isExportOpen } from './export/export'
 import { undoLast } from './undo'
@@ -473,6 +473,8 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
       case 'open-folder': openBtn.click(); break
       case 'open-default': openSelectionDefault(); break
       case 'reveal': if (focus) void api.fs.revealInFinder(focus); break
+      case 'rotate-left': void rotateSelection(false); break
+      case 'rotate-right': void rotateSelection(true); break
       case 'export': exportSelection(); break
       case 'optimize': void optimizeSelection(); break
       case 'rename': emit('rename:start', undefined); break

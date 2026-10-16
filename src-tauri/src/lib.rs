@@ -13,6 +13,7 @@ mod menu;
 mod optimize;
 mod platform;
 mod protocol;
+mod rotate;
 mod sync;
 mod taken;
 #[cfg(test)]
@@ -85,6 +86,7 @@ pub fn run() {
             commands::trash_files,
             commands::put_back,
             commands::rename_file,
+            commands::rotate_files,
             commands::taken_dates,
             commands::export_image,
             commands::image_properties,

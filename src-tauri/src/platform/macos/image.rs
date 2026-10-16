@@ -15,7 +15,7 @@ use objc2_core_graphics::{
     CGInterpolationQuality,
 };
 use objc2_core_media::CMTime;
-use objc2_foundation::{NSString, NSURL};
+use objc2_foundation::{NSFileManager, NSFileManagerItemReplacementOptions, NSString, NSURL};
 
 use crate::platform::{unpremultiply, Rgba};
 use objc2_image_io::{
@@ -24,7 +24,7 @@ use objc2_image_io::{
     kCGImagePropertyPixelHeight, kCGImagePropertyPixelWidth,
     kCGImageSourceCreateThumbnailFromImageAlways, kCGImageSourceCreateThumbnailWithTransform,
     kCGImageSourceShouldCache, kCGImageSourceThumbnailMaxPixelSize, CGImageDestination,
-    CGImageSource,
+    kCGImageDestinationOrientation, CGImageSource,
 };
 
 /// A decoded image, either from ImageIO (CF-owned) or AVFoundation (ObjC-owned).
@@ -253,6 +253,60 @@ pub fn png_bytes(path: &Path) -> Option<Vec<u8>> {
 }
 
 
+/// The file types whose orientation tag the Mac can change without touching the picture data.
+const ROTATABLE: [&str; 4] = ["public.jpeg", "public.heic", "public.heif", "public.tiff"];
+
+/// Turns the photo a quarter turn by its orientation tag. The picture data is copied as it is
+/// (no new compression, no quality loss), into a hidden file next to it that then takes the
+/// photo's place in one step, keeping its dates, tags and permissions. Err: a message to show.
+pub fn rotate(path: &Path, clockwise: bool) -> Result<(), String> {
+    autoreleasepool(|_| {
+        let src = source(path)?;
+        let uti = unsafe { src.r#type() }.map(|t| t.to_string()).unwrap_or_default();
+        if !ROTATABLE.contains(&uti.as_str()) {
+            return Err("Kadar turns JPEG, HEIC and TIFF photos only.".into());
+        }
+        if unsafe { src.count() } != 1 {
+            return Err("This file holds more than one picture.".into());
+        }
+        let props = unsafe { src.properties_at_index(0, None) }.ok_or("cannot read image")?;
+        let props: CFRetained<CFDictionary<CFString, CFType>> = unsafe { CFRetained::cast_unchecked(props) };
+        let now = props
+            .get(unsafe { kCGImagePropertyOrientation })
+            .and_then(|v| v.downcast::<CFNumber>().ok())
+            .and_then(|n| n.as_i64())
+            .unwrap_or(1);
+        let next = crate::rotate::turned(u32::try_from(now).unwrap_or(1), clockwise);
+
+        let name = path.file_name().ok_or("bad path")?.to_string_lossy();
+        let tmp = path.with_file_name(format!(".{name}.kadar-rotate"));
+        let result = (|| {
+            let url = CFURL::from_file_path(&tmp).ok_or("bad path")?;
+            let dest = unsafe { CGImageDestination::with_url(&url, &CFString::from_str(&uti), 1, None) }
+                .ok_or("cannot write next to the photo")?;
+            let tag = CFNumber::new_i32(next as i32);
+            let opts = options(&[(unsafe { kCGImageDestinationOrientation }, &tag)]);
+            if !unsafe { dest.copy_image_source(&src, Some(opts.as_ref()), std::ptr::null_mut()) } {
+                return Err("the Mac could not turn this photo".to_string());
+            }
+            let fm = NSFileManager::defaultManager();
+            let file = |p: &Path| NSURL::fileURLWithPath(&NSString::from_str(&p.to_string_lossy()));
+            fm.replaceItemAtURL_withItemAtURL_backupItemName_options_resultingItemURL_error(
+                &file(path),
+                &file(&tmp),
+                None,
+                NSFileManagerItemReplacementOptions(0),
+                None,
+            )
+            .map_err(|e| e.localizedDescription().to_string())
+        })();
+        if result.is_err() {
+            let _ = std::fs::remove_file(&tmp);
+        }
+        result
+    })
+}
+
 /// When the photo was taken, from its camera data (EXIF), as milliseconds since 1970.
 /// The camera writes local time without a zone; it is read as this Mac's local time.
 pub fn date_taken_ms(path: &Path) -> Option<f64> {
@@ -400,4 +454,81 @@ mod tests {
         assert!(super::video_frame(Path::new("/no/such.mov"), 100).is_err());
     }
 
+    /// A copy of the test gradient in the file type `uti`: dark at the top left, red to the right,
+    /// green downward.
+    fn write_as(png: &Path, out: &Path, uti: &str) {
+        use objc2_core_foundation::{CFString, CFURL};
+        let (w, h) = super::image_size(png).unwrap();
+        let frame = super::image_thumbnail(png, w.max(h)).unwrap();
+        let url = CFURL::from_file_path(out).unwrap();
+        let dest = unsafe { super::CGImageDestination::with_url(&url, &CFString::from_str(uti), 1, None) }.unwrap();
+        unsafe { dest.add_image(frame.image(), None) };
+        assert!(unsafe { dest.finalize() });
+    }
+
+    /// The shown pixels (orientation applied), as RGBA.
+    fn shown(path: &Path) -> crate::platform::Rgba {
+        let (w, h) = super::image_size(path).unwrap();
+        super::to_rgba(&super::image_thumbnail(path, w.max(h)).unwrap()).unwrap()
+    }
+
+    fn px(img: &crate::platform::Rgba, x: u32, y: u32) -> [u8; 3] {
+        let i = ((y * img.width + x) * 4) as usize;
+        [img.data[i], img.data[i + 1], img.data[i + 2]]
+    }
+
+    #[test]
+    fn rotate_turns_a_jpeg_by_its_tag_without_touching_the_picture() {
+        let dir = temp_dir("macos-rotate");
+        let png = dir.join("g.png");
+        write_png(&png, 120, 80);
+        let jpg = dir.join("photo.jpg");
+        write_as(&png, &jpg, "public.jpeg");
+        turn_and_back(&dir, &jpg);
+    }
+
+    #[test]
+    fn rotate_turns_a_heic_photo_too() {
+        let dir = temp_dir("macos-rotate-heic");
+        let png = dir.join("g.png");
+        write_png(&png, 120, 80);
+        let heic = dir.join("photo.heic");
+        write_as(&png, &heic, "public.heic");
+        turn_and_back(&dir, &heic);
+    }
+
+    /// Turns right, checks the corners, the dates and that no hidden copy is left, then turns left.
+    fn turn_and_back(dir: &Path, jpg: &Path) {
+        let jpg = jpg.to_path_buf();
+        let before = shown(&jpg);
+        let created = std::fs::metadata(&jpg).unwrap().created().unwrap();
+
+        super::rotate(&jpg, true).unwrap();
+        assert_eq!(super::image_size(&jpg), Some((80, 120)), "turned right: width and height swap");
+        let right = shown(&jpg);
+        // The dark top-left corner is now at the top right; the green bottom-left is at the top left.
+        let [r, g, _] = px(&right, right.width - 1, 0);
+        assert!(r < 40 && g < 40, "dark corner at the top right, got {r},{g}");
+        let [r, g, _] = px(&right, 0, 0);
+        assert!(r < 60 && g > 190, "green corner at the top left, got {r},{g}");
+        let hidden = format!(".{}.kadar-rotate", jpg.file_name().unwrap().to_string_lossy());
+        assert!(!dir.join(hidden).exists(), "no hidden copy is left");
+        let ms = |t: std::time::SystemTime| t.duration_since(std::time::UNIX_EPOCH).unwrap().as_millis();
+        // The Mac keeps the date through its own date type, which rounds below a microsecond.
+        assert_eq!(ms(std::fs::metadata(&jpg).unwrap().created().unwrap()), ms(created), "the file keeps its creation date");
+
+        super::rotate(&jpg, false).unwrap();
+        assert_eq!(shown(&jpg).data, before.data, "left undoes right, pixel for pixel: no new compression");
+    }
+
+    #[test]
+    fn rotate_refuses_files_it_cannot_turn_by_tag() {
+        let dir = temp_dir("macos-rotate-refuse");
+        let png = dir.join("g.png");
+        write_png(&png, 20, 10);
+        let bytes = std::fs::read(&png).unwrap();
+        assert!(super::rotate(&png, true).unwrap_err().contains("JPEG, HEIC and TIFF"));
+        assert_eq!(std::fs::read(&png).unwrap(), bytes, "the refused file is untouched");
+        assert!(super::rotate(&dir.join("gone.jpg"), true).is_err());
+    }
 }

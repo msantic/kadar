@@ -6,7 +6,7 @@ import { emit } from './bus'
 import { getState, setState } from './store'
 import { updateSession } from './session'
 import { words } from '../platform'
-import { joinPath, parentOf } from '../paths'
+import { baseName, joinPath, parentOf } from '../paths'
 
 function commit(selection: Set<string>, focus: string | null, anchor: string | null): void {
   setState({ selection, selectedPath: focus, anchorPath: anchor })
@@ -121,6 +121,39 @@ export async function trashSelection(): Promise<void> {
   } catch (err) {
     emit('toast', { text: `Move to ${words.trash} failed: ${String(err)}` })
   }
+}
+
+// Turns run one after the other, so quick presses of ⌘R all count, in order.
+let rotations: Promise<void> = Promise.resolve()
+
+/** ⌘L / ⌘R: turns the selected photos a quarter turn on disk, without quality loss. ⌘Z turns
+ *  them back. Photos Kadar cannot turn (PNG, RAW, ...) get a message; the others still turn. */
+export function rotateSelection(clockwise: boolean): Promise<void> {
+  const paths = selectedImages()
+  if (paths.length === 0) return rotations
+  rotations = rotations.then(async () => {
+    try {
+      const results = await window.viewer.fs.rotate(paths, clockwise)
+      const turned = results.filter((r) => !r.error).map((r) => r.path)
+      const failed = results.filter((r) => r.error)
+      if (turned.length > 0) {
+        const { pushUndo } = await import('./undo')
+        pushUndo({ kind: 'rotate', paths: turned, clockwise })
+      }
+      const first = failed[0]
+      if (first) {
+        const name = baseName(first.path)
+        emit('toast', {
+          text: failed.length === 1 ? `Cannot rotate "${name}": ${first.error}` : `${plural(failed.length, 'file', 'files')} not rotated: ${first.error}`,
+        })
+      }
+      // Show it at once; the Mac's notice of the change can take a moment.
+      if (turned.length > 0) emit('folder:refresh', undefined)
+    } catch (err) {
+      emit('toast', { text: `Rotate failed: ${String(err)}` })
+    }
+  })
+  return rotations
 }
 
 /** Cmd+O or Cmd+Down: a folder opens in Kadar; files open in their default apps. */

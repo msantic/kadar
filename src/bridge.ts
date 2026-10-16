@@ -31,6 +31,8 @@ export function installViewerBridge(): void {
       trash:            (paths) => invoke('trash_files', { paths }),
       putBack:          (pairs) => invoke('put_back', { pairs }),
       rename:           (path, newName) => invoke('rename_file', { path, newName }),
+      rotate:           (paths, clockwise) => invoke('rotate_files', { paths, clockwise }),
+      canRotate:        () => invoke<{ rotate: boolean }>('platform_features').then((f) => f.rotate),
       takenDates:       (files) => invoke('taken_dates', { files }),
       openDefault:      (path) => invoke('open_default', { path }),
       watch:            (path) => invoke('watch_folder', { path }),

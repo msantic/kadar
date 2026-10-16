@@ -130,6 +130,13 @@ pub fn rename_file(path: String, new_name: String) -> Result<String, String> {
     Ok(dest.to_string_lossy().into_owned())
 }
 
+/// Rotate Left (`clockwise` false) or Right: turns each photo a quarter turn on disk, without
+/// quality loss. Returns what happened to each file, in the same order.
+#[tauri::command(async)]
+pub fn rotate_files(paths: Vec<String>, clockwise: bool) -> Vec<crate::rotate::Rotated> {
+    crate::rotate::rotate_files(&paths, clockwise)
+}
+
 /// Camera dates for the "Date Taken" sort, in the same order as `files`.
 #[tauri::command(async)]
 pub fn taken_dates(taken: State<'_, crate::taken::TakenDates>, files: Vec<crate::taken::FileStamp>) -> Vec<Option<f64>> {

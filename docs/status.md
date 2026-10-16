@@ -15,7 +15,7 @@ Read next, in this order: [CLAUDE.md](../CLAUDE.md) (rules and traps, short), th
 ## What Kadar is
 
 A fast image viewer and image/video tool with four tabs: **Viewer** (folder tree, favorites,
-thumbnail grid, big view, info panel, Export for Web, rename, Trash with Undo, drag-out, copy),
+thumbnail grid, big view, info panel, Export for Web, rename, Rotate Left/Right (Mac), Trash with Undo, drag-out, copy),
 **Optimize** (web copies of images and videos), **Record** (one window or the screen, with sound)
 and **Screenshot** (one app window). "Kadar" means a film frame or shot. App id
 `com.msantic.kadar`.
@@ -49,8 +49,8 @@ small self-built ffmpeg for video.
 - **Linux:** on hold by the owner's decision. The plan stays in the README.
 - **Feature work is finished for now** (owner, 2026-10-09). New work is fixes, speed and
   documentation, unless the owner asks for a feature.
-- **Checks:** `npm run check` passes: 79 window checks and 59 Rust checks on the Mac
-  (2026-10-15). Windows last ran 47 Rust checks on 2026-10-09; the live-folder changes of
+- **Checks:** `npm run check` passes: 82 window checks and 64 Rust checks on the Mac
+  (2026-10-16). Windows last ran 47 Rust checks on 2026-10-09; the live-folder changes of
   2026-10-15 are not yet checked there (run there, see windows.md). Every code file and public function has a
   description; the docs check enforces it.
 - **Measured speed** (10,000 photos, Mac): folder opens in about 70 ms, first thumbnails in about
@@ -131,6 +131,7 @@ and from this project's history. Follow them in every message and every change.
 | 2026-10-09 (midday) | Stabilization: crash fixes, about 70 automatic checks, full documentation, docs check, notarized Mac installer. |
 | 2026-10-09 (afternoon) | Code split into one part per system. Windows: Viewer, Optimize, Export, video, drag-out, one Kadar at a time, installer. Linux put on hold; feature work declared finished. Version 1.0.0 with the version line in the sidebar. |
 | 2026-10-15 | Freeze fixed: saving the window place from a helper thread deadlocked with the window-state add-on after the Mac woke. Memory kept after right-clicks, Export for Web and the big view freed. Live folder made robust: edited photos get new thumbnails and the big view reloads, the sidebar tree follows subfolder changes, a deleted or renamed open folder is left with a message, and Kadar looks again when its window comes to the front. |
+| 2026-10-16 | Rotate Left and Right (⌘L, ⌘R; Show in Finder moved to ⇧⌘R) on the Mac: turns JPEG, HEIC and TIFF photos by their orientation tag, without quality loss, with Undo. Not on Windows yet. |
 
 The full record of choices and their reasons is in [decisions.md](decisions.md); `git log` has
 every step.

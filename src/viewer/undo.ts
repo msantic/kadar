@@ -1,4 +1,4 @@
-// Undo for file changes made in Kadar (⌘Z): Move to Trash and rename. Kept while Kadar is open.
+// Undo for file changes made in Kadar (⌘Z): Move to Trash, rename and rotate. Kept while Kadar is open.
 
 import { emit } from './bus'
 import { selectPath } from './selection'
@@ -10,6 +10,7 @@ import { baseName } from '../paths'
 export type UndoStep =
   | { kind: 'trash'; pairs: [string, string][] } // [where it was, where it is in the Trash]
   | { kind: 'rename'; now: string; before: string } // full paths
+  | { kind: 'rotate'; paths: string[]; clockwise: boolean } // undone by the opposite turn
 
 const MAX_STEPS = 50
 const steps: UndoStep[] = []
@@ -35,6 +36,10 @@ export async function undoLast(): Promise<void> {
       setState({ selection: new Set(back), selectedPath: back[0] ?? null, anchorPath: back[0] ?? null })
       updateSession({ selectedPaths: back, selectedPath: back[0] ?? null, anchorPath: back[0] ?? null })
       emit('toast', { text: back.length === 1 ? `Put back "${name(back[0]!)}"` : `Put back ${back.length} files` })
+    } else if (step.kind === 'rotate') {
+      const results = await window.viewer.fs.rotate(step.paths, !step.clockwise)
+      const failed = results.find((r) => r.error)
+      emit('toast', { text: failed ? `Could not turn "${name(failed.path)}" back: ${failed.error}` : 'Rotate undone' })
     } else {
       const restored = await window.viewer.fs.rename(step.now, name(step.before))
       selectPath(restored)

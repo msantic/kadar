@@ -8,7 +8,8 @@
 //! What each module must offer:
 //! - `image`: decode at a size, thumbnails, video frames and length, image size, camera date,
 //!   all header details as JSON, PNG bytes for the clipboard, and drawing a turned and scaled
-//!   part (`draw_turned`). Results are `Rgba` pixels or the system's own `Frame`. (A system's
+//!   part (`draw_turned`), and turning a photo on disk by its orientation tag (`rotate`, with the
+//!   tag rules in `crate::rotate`). Results are `Rgba` pixels or the system's own `Frame`. (A system's
 //!   own capture code may use more helpers from its `image`; they are not shared.)
 //! - `system`: Trash, show in the file manager, open in the default app, open a web link,
 //!   "is this a cloud file not on disk yet", the number of fast processor cores, and
@@ -39,6 +40,8 @@ pub struct Features {
     pub screenshot: bool,
     /// The Record tab works.
     pub record: bool,
+    /// Rotate Left and Right turn photos on disk.
+    pub rotate: bool,
 }
 
 /// "~/Pictures" → the full path inside the home folder (HOME, or USERPROFILE on Windows).

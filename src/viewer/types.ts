@@ -106,6 +106,11 @@ export interface ViewerAPI {
     putBack: (pairs: [string, string][]) => Promise<string[]>
     /** Camera dates for the "Date Taken" sort, in the same order. */
     takenDates: (files: { path: string; mtimeMs: number }[]) => Promise<(number | null)[]>
+    /** Turns photos a quarter turn on disk (Rotate Left / Right), without quality loss. One
+     *  result per file, in the same order; `error` is a message to show. */
+    rotate: (paths: string[], clockwise: boolean) => Promise<{ path: string; error: string | null }[]>
+    /** True when this system can turn photos on disk (the Mac; not Windows yet). */
+    canRotate: () => Promise<boolean>
     /** Renames a file; returns its new path. */
     rename: (path: string, newName: string) => Promise<string>
     openDefault: (p: string) => Promise<string>

@@ -25,6 +25,17 @@ vi.mock('@tauri-apps/api/menu', () => {
   }
 })
 
+const rotated: { paths: string[]; clockwise: boolean }[] = []
+;(window as unknown as { viewer: unknown }).viewer = {
+  fs: {
+    canRotate: async () => true,
+    rotate: async (paths: string[], clockwise: boolean) => {
+      rotated.push({ paths, clockwise })
+      return paths.map((path) => ({ path, error: null }))
+    },
+  },
+}
+
 const { showContextMenu } = await import('./context-menu')
 const { setState } = await import('./store')
 const { on } = await import('./bus')
@@ -70,5 +81,19 @@ describe('right-click menu', () => {
     item('Open').action!()
     off()
     expect(opened).toEqual([2])
+  })
+
+  it('Rotate Left and Right turn the selected photos, and are off without a photo', async () => {
+    setState({ selection: new Set([files[0]!.path, files[2]!.path]), selectedPath: files[0]!.path })
+    await showContextMenu(10, 10)
+    item('Rotate Right').action!()
+    item('Rotate Left').action!()
+    await vi.waitFor(() => expect(rotated).toHaveLength(2))
+    expect(rotated[0]).toEqual({ paths: [files[0]!.path, files[2]!.path], clockwise: true })
+    expect(rotated[1]!.clockwise).toBe(false)
+
+    setState({ entries: [entry('clip.mp4', { kind: 'video' })], selection: new Set(['/photos/clip.mp4']), selectedPath: '/photos/clip.mp4' })
+    await showContextMenu(10, 10)
+    expect(item('Rotate Right').enabled).toBe(false)
   })
 })

@@ -76,6 +76,7 @@ Mac crates (objc2, libc, ...) are listed for macOS builds only in `Cargo.toml`.
 | `lib.rs` | Builds the app: plugins, `viewer-file` scheme, menu, managed state, command list; handles `RunEvent::Opened`; saves window state on move/resize | tauri, `tauri-plugin-window-state`, `tauri-plugin-dialog` | main; one thread waits 500 ms after the last move/resize, then saves on the main thread |
 | `commands.rs` | Every command; put back, rename and meta live here directly; trash and opening go to `platform::system` | — | Tauri worker or main (see above) |
 | `formats.rs` | Image / video / unsupported by extension only; MIME types; which files need a preview | — | any |
+| `rotate.rs` | Rotate Left/Right: orientation tag rules, one result per file | — | command thread |
 | `fs_scan.rs` | Folder listing (skips dot files, stops at 50,000 entries), tree children, Finder-style natural sort | std::fs | command thread |
 | `watch.rs` | Watches the open folder (not recursive), 200 ms quiet time, emits `viewer:fs:changed`; a system error (lost changes) also counts as a change | `notify` (FSEvents) | notify thread + one debounce thread |
 | `thumbs.rs` | Thumbnail queue, workers, disk cache, eviction | `platform::image`; `sha1_smol` | one worker per performance core + hourly sweep thread |
@@ -222,6 +223,13 @@ when asked. `capture_resize_window` moves and sizes the app's front window with 
   **Put back** renames each file back and never replaces an existing file, then calls `platform::system::forget_trashed` (Windows deletes the bin's `$I` record; the Mac has none). Both feed Undo. On Windows, `trash` uses IFileOperation with a progress sink to learn each file's place in the Recycle Bin, and skips files that are gone.
 - **Rename** (`rename_file`): rejects empty names, `/`, NUL, `.`/`..`, and names already taken;
   a case-only change is allowed.
+- **Rotate** (`rotate_files`, ⌘L / ⌘R): `rotate.rs` has the EXIF orientation rules (`turned`:
+  plain tags 1→6→3→8 clockwise, mirrored 2→7→4→5) and runs each file; `platform::image::rotate`
+  writes the tag. Mac: `CGImageDestinationCopyImageSource` with `kCGImageDestinationOrientation`
+  copies the picture data unchanged into a hidden `.<name>.kadar-rotate` file, then
+  `NSFileManager.replaceItemAtURL` puts it in the photo's place (keeps dates, tags, permissions).
+  JPEG, HEIC/HEIF and TIFF only; Windows answers "not yet" and the window hides the items
+  (`Features.rotate`). Undo turns the other way. The live folder then shows the new version.
 - **Open With from Finder** (Mac): `RunEvent::Opened` pushes paths into `OpenedFiles` (managed on the
   Builder, before `setup`, because macOS can send files during launch), emits `open-paths`, and
   focuses the window. The window listens first, then calls `take_opened` once at start, so no file

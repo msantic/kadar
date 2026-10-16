@@ -327,6 +327,11 @@ pub fn decode_for_web(path: &Path, max_width: u32) -> Result<Rgba, String> {
     image_thumbnail(path, crate::platform::long_side_for_width(w, h, max_width))
 }
 
+/// Rotate Left and Right are not on Windows yet (the window hides them: `FEATURES.rotate`).
+pub fn rotate(_path: &Path, _clockwise: bool) -> Result<(), String> {
+    Err("Rotate is not available on Windows yet.".into())
+}
+
 /// The image as PNG bytes, for the clipboard. PNG files are used as they are; other formats are
 /// decoded at full size and turned upright.
 pub fn png_bytes(path: &Path) -> Option<Vec<u8>> {

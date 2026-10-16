@@ -9,7 +9,8 @@ import { Menu, MenuItem, PredefinedMenuItem } from '@tauri-apps/api/menu'
 import { emit } from './bus'
 import { getState } from './store'
 import {
-  copySelection, exportSelection, openSelectionDefault, optimizeSelection, selectedImages, selectedPaths, trashSelection,
+  copySelection, exportSelection, openSelectionDefault, optimizeSelection, rotateSelection, selectedImages, selectedPaths,
+  trashSelection,
 } from './selection'
 import { system, words } from '../platform'
 import type { FileEntry } from './types'
@@ -25,6 +26,8 @@ interface Built {
   menu: Menu
   openDefault: MenuItem
   rename: MenuItem
+  /** Rotate Left and Right; null on a system that cannot turn photos on disk. */
+  rotate: [MenuItem, MenuItem] | null
   copy: MenuItem
   copyPaths: MenuItem
   exportWeb: MenuItem
@@ -48,10 +51,16 @@ async function build(): Promise<Built> {
   const openDefault = await MenuItem.new({ text: 'Open in Default App', accelerator: 'CmdOrCtrl+O', action: () => openSelectionDefault() })
   const reveal = await MenuItem.new({
     text: words.showInFileManager,
-    accelerator: 'CmdOrCtrl+R',
+    accelerator: system === 'mac' ? 'Shift+CmdOrCtrl+R' : 'CmdOrCtrl+R',
     action: () => { if (target) void window.viewer.fs.revealInFinder(target.focus) },
   })
   const rename = await MenuItem.new({ text: 'Rename', action: () => emit('rename:start', undefined) })
+  const rotate: [MenuItem, MenuItem] | null = (await window.viewer.fs.canRotate().catch(() => false))
+    ? [
+        await MenuItem.new({ text: 'Rotate Left', accelerator: 'CmdOrCtrl+L', action: () => void rotateSelection(false) }),
+        await MenuItem.new({ text: 'Rotate Right', accelerator: 'CmdOrCtrl+R', action: () => void rotateSelection(true) }),
+      ]
+    : null
   const copy = await MenuItem.new({ text: 'Copy', accelerator: 'CmdOrCtrl+C', action: () => void copySelection(false) })
   const copyPaths = await MenuItem.new({ text: 'Copy Path', accelerator: 'Shift+CmdOrCtrl+C', action: () => void copySelection(true) })
   const exportWeb = await MenuItem.new({ text: 'Export for Web…', accelerator: 'CmdOrCtrl+E', action: () => exportSelection() })
@@ -64,12 +73,13 @@ async function build(): Promise<Built> {
   const menu = await Menu.new({
     items: [
       open, openDefault, reveal, rename, await separator(),
+      ...(rotate ? [...rotate, await separator()] : []),
       copy, copyPaths, await separator(),
       exportWeb, optimize, await separator(),
       trash,
     ],
   })
-  return { menu, openDefault, rename, copy, copyPaths, exportWeb, optimize }
+  return { menu, openDefault, rename, rotate, copy, copyPaths, exportWeb, optimize }
 }
 
 /** Opens the menu at window point x, y (CSS px). Does nothing when no file is selected. */
@@ -89,6 +99,7 @@ export async function showContextMenu(x: number, y: number): Promise<void> {
   await Promise.all([
     m.openDefault.setText(many ? `Open ${n} Files in Default App` : 'Open in Default App'),
     m.rename.setEnabled(!many),
+    ...(m.rotate ?? []).map((item) => item.setEnabled(images > 0)),
     m.copy.setText(many ? `Copy ${n} Files` : 'Copy'),
     m.copyPaths.setText(many ? `Copy ${n} Paths` : 'Copy Path'),
     m.exportWeb.setText(images > 1 ? `Export ${images} Images for Web…` : 'Export for Web…'),

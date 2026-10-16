@@ -18,8 +18,8 @@ pub mod recorder;
 /// Recycle Bin, File Explorer, the default app, cloud files and processor cores.
 pub mod system;
 
-/// The Viewer, Optimize and Export for Web work on Windows; Screenshot and Record come later.
-pub const FEATURES: crate::platform::Features = crate::platform::Features { system: "windows", screenshot: false, record: false };
+/// The Viewer, Optimize and Export for Web work on Windows; Screenshot, Record and Rotate come later.
+pub const FEATURES: crate::platform::Features = crate::platform::Features { system: "windows", screenshot: false, record: false, rotate: false };
 
 /// Starts COM on this thread once (multithreaded), as WIC and the shell need. A thread that
 /// already runs COM another way (the window's main thread) keeps it.

@@ -221,7 +221,16 @@ Kadar always drags a copy. The original files stay in their folder.
 
 **Show in Finder**
 
-Press **⌘R** to show the selected file in a Finder window.
+Press **⇧⌘R** to show the selected file in a Finder window.
+
+**Rotate photos**
+
+Press **⌘L** to turn the selected photos to the left, or **⌘R** to turn them to the right. You can also use **File › Rotate Left** and **File › Rotate Right**, or the right-click menu. The keys also work in the big view.
+
+- Kadar turns the photo file itself, a quarter turn at a time. Other apps show it turned too.
+- The picture keeps its full quality. Kadar changes only the photo's turn setting, not the picture data.
+- Kadar turns JPEG, HEIC and TIFF photos. For other files (for example PNG or RAW), a message says that Kadar cannot turn them.
+- Press **⌘Z** to turn the photos back.
 
 **Right-click menu**
 
@@ -231,8 +240,10 @@ Right-click a tile to open a menu. If the tile is not selected, Kadar selects it
 |---|---|---|
 | Open | | Opens the file in the big view, or opens the subfolder. |
 | Open in Default App | ⌘O | Opens the files in their default apps. |
-| Show in Finder | ⌘R | Shows the file in Finder. |
+| Show in Finder | ⇧⌘R | Shows the file in Finder. |
 | Rename | | Renames the file. Not available when you select more than one file. |
+| Rotate Left | ⌘L | Turns the selected photos to the left. Not available when no image is selected. |
+| Rotate Right | ⌘R | Turns the selected photos to the right. Not available when no image is selected. |
 | Copy | ⌘C | Copies the files. |
 | Copy Path | ⇧⌘C | Copies the full paths. |
 | Export for Web… | ⌘E | Opens Export for Web. Not available when no image is selected. |
@@ -558,7 +569,8 @@ While Export for Web is open, the menu commands for the Viewer do not run.
 | ⌘I | Opens the file in the big view, with the Info panel. |
 | Return | Renames the selected file. |
 | ⌘O, ⌘↓ | Opens the files in their default apps. On a subfolder, opens it in Kadar. |
-| ⌘R | Shows the file in Finder. |
+| ⇧⌘R | Shows the file in Finder. |
+| ⌘L, ⌘R | Turns the selected photos to the left or to the right. |
 | ⌘C | Copies the selected files. |
 | ⇧⌘C | Copies the paths of the selected files. |
 | ⌘E | Opens Export for Web for the selected images. |
@@ -610,9 +622,9 @@ While Export for Web is open, the menu commands for the Viewer do not run.
 | Space | Plays or pauses a video. For an image, closes the big view. |
 | Esc, Return | Closes the big view. |
 
-| ⌘Z | Undoes the last Move to Trash or rename. |
+| ⌘Z | Undoes the last Move to Trash, rename or rotate. |
 
-These menu keys also work in the big view: ⌘O, ⌘R, ⇧⌘O, ⌘⌫.
+These menu keys also work in the big view: ⌘O, ⇧⌘R, ⌘L, ⌘R, ⇧⌘O, ⌘⌫.
 
 ### Export for Web
 
@@ -695,6 +707,7 @@ In Finder, Kadar shows in **Open With** for these types: JPG, JPEG, PNG, HEIC, H
 | The Optimize list shows "Already exists". | The result is already in the "optimized" folder. Delete the old result to make it again. |
 | "Rename failed: … already exists in this folder." | Type a different name. |
 | "Rename failed: This name is not allowed." | Do not use a slash (/), and do not use an empty name. |
+| "Cannot rotate "…": Kadar turns JPEG, HEIC and TIFF photos only." | Kadar cannot turn this file type without quality loss. Use **Export for Web** to make a turned copy. |
 | "Undo failed: … already exists." | A new file with the same name is in the folder. Kadar does not write over it. Get the old file from the Trash in Finder. |
 | The count shows "(truncated)". | The folder has more than 50,000 items. Kadar shows only the first 50,000. Move files into subfolders. |
 | A file is not in the grid. | Kadar does not show that file type, or the filter hides it. Press **Esc** in the Filter field to clear it. |
