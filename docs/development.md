@@ -36,10 +36,16 @@ Later runs start in seconds.
 | `npm run share` | Builds, then makes the notarized installer to share (see [Share Kadar](#share-kadar)). |
 | `npm run share:windows` | Makes the Windows installer on the office server's Windows machine and copies it here ([windows.md](windows.md#the-installer-share-kadar-for-windows)). |
 | `npm run build` | Builds ffmpeg if needed, runs every check, then builds the signed `Kadar.app` and `.dmg` in `src-tauri/target/release/bundle/`. Stops on the first failed check. |
+| `npm run icons` | Makes every app icon file (PNG sizes, Mac `icon.icns`, Windows `icon.ico`) from the one drawing `src-tauri/icons/icon.svg`. Needs `brew install librsvg`. |
 | `node scripts/check-docs.mjs` | Runs only the documentation check. |
 | `scripts/build-ffmpeg.sh --force` | Builds ffmpeg again, even when the current copy is up to date. |
 
 For cargo itself, run it in `src-tauri/` as `~/.cargo/bin/cargo …`.
+
+To change the app icon: copy the new drawing over `src-tauri/icons/icon.svg`, run
+`npm run icons`, then `npm run build`. Never edit the icon PNG, `.icns` or `.ico` files by hand.
+Kadar's icon belongs to the icon family of all internal apps in `~/dev/app-icons`; a new drawing
+comes from there.
 
 The dev server listens on `127.0.0.1:1420`. Tauri's window loads the page from there in dev
 mode. A release build has the page inside the app and needs no server.
