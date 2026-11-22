@@ -4,7 +4,7 @@
 
 import { api } from './ipc'
 import { emit, on } from './bus'
-import { getSession, updateSession } from './session'
+import { getSession, updateSession, type ViewerSession } from './session'
 import {
   copySelection, exportSelection, openSelectionDefault, optimizeSelection, restoreSelection, rotateSelection, selectedPaths,
   selectOnly, selectAll, trashSelection,
@@ -220,16 +220,52 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
   const backStack: string[] = []
   const forwardStack: string[] = []
 
-  /** Opens a folder. `select` picks a file or subfolder in it, for example the one you came from. */
+  // Where you were in each folder since launch: the top of the grid and the selection. Back,
+  // Up, Forward and opening the folder again return there. Kept in memory only, for the last
+  // MAX_PLACES folders.
+  type Place = Pick<ViewerSession, 'topPath' | 'topIndex' | 'selectedPaths' | 'selectedPath' | 'anchorPath'>
+  const MAX_PLACES = 200
+  const places = new Map<string, Place>()
+
+  /** Keeps the open folder's place before another folder replaces it. A folder still loading has
+   *  no place yet: keeping it would replace the place saved from an earlier visit with the top. */
+  function rememberPlace(): void {
+    const { currentFolder: folder, loading } = getState()
+    const s = getSession()
+    if (!folder || loading || s.folder !== folder) return
+    places.delete(folder)
+    places.set(folder, {
+      topPath: s.topPath, topIndex: s.topIndex, selectedPaths: [...s.selectedPaths], selectedPath: s.selectedPath, anchorPath: s.anchorPath,
+    })
+    if (places.size > MAX_PLACES) places.delete(places.keys().next().value!)
+  }
+
+  /** Puts this image back at the top of the grid: by path, or by number when the file is gone. */
+  function showTop(topPath: string | null, topIndex: number): void {
+    const { entries } = getState()
+    if (entries.length === 0) return
+    const byPath = topPath ? entries.findIndex((e) => e.path === topPath) : -1
+    const top = byPath >= 0 ? byPath : Math.min(topIndex, entries.length - 1)
+    grid.scrollToIndex(top)
+    updateSession({ topIndex: top, topPath: entries[top]!.path })
+  }
+
+  /** Opens a folder where you left it. `select` picks a file or subfolder in it, for example the
+   *  one you came from, and scrolls only if it is off screen. */
   async function openFolder(path: string, select?: string): Promise<void> {
+    rememberPlace()
+    const place = places.get(path)
     updateSession({ folder: path, topPath: null, topIndex: 0, selectedPath: null, selectedPaths: [], anchorPath: null, bigView: false, filter: '' })
     filterInput.value = ''
     await loadFolder(path)
-    if (!select || getState().currentFolder !== path) return
-    const index = getState().entries.findIndex((e) => e.path === select)
+    if (getState().currentFolder !== path) return
+    if (place) showTop(place.topPath, place.topIndex)
+    const index = select ? getState().entries.findIndex((e) => e.path === select) : -1
     if (index >= 0) {
       selectOnly(index)
-      grid.scrollToIndex(index)
+      grid.revealIndex(index)
+    } else if (place) {
+      restoreSelection(place.selectedPaths, place.selectedPath, place.anchorPath)
     }
   }
 
@@ -288,6 +324,7 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     }
     const folder = parentOf(first.path) ?? first.path
     if (getState().currentFolder !== folder) {
+      rememberPlace()
       updateSession({ folder, topPath: null, topIndex: 0, selectedPath: null, selectedPaths: [], anchorPath: null, bigView: false, filter: '' })
       filterInput.value = ''
       await loadFolder(folder)
@@ -313,11 +350,9 @@ export async function initViewer(open: OpenItem[] = []): Promise<void> {
     void loadFolder(last.folder).then(() => {
       // Skip if you already picked another folder while this one loaded.
       if (getState().currentFolder !== last.folder) return
-      const { entries } = getState()
-      const byPath = last.topPath ? entries.findIndex((e) => e.path === last.topPath) : -1
-      grid.scrollToIndex(byPath >= 0 ? byPath : Math.min(last.topIndex, entries.length - 1))
+      showTop(last.topPath, last.topIndex)
       restoreSelection(last.selectedPaths, last.selectedPath, last.anchorPath)
-      const selected = last.selectedPath ? entries.findIndex((e) => e.path === last.selectedPath) : -1
+      const selected = last.selectedPath ? getState().entries.findIndex((e) => e.path === last.selectedPath) : -1
       if (selected >= 0 && last.bigView) emit('lightbox:open', { index: selected })
     })
   }

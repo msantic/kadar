@@ -182,6 +182,8 @@ The grid changes when the folder changes on disk. You do not have to open the fo
 | **⌘[** | Goes back to the previous folder, as in Finder. |
 | **⌘]** | Goes forward again. |
 
+A folder you open again shows the same place in the grid as when you left it, with the same selection. This is true for **⌘↑**, **⌘[**, **⌘]** and a click in the sidebar. When you go back up, the folder you came from is selected. The grid scrolls only if that folder is not on screen.
+
 **Rename a file**
 
 1. Select one file.
@@ -662,6 +664,7 @@ Kadar does **not** remember these things after you quit:
 
 - the Undo steps,
 - the Back and Forward history of folders,
+- the place in the grid of each folder, except the folder that is open when you quit,
 - the list in the Optimize tab.
 
 ### Open files from Finder

@@ -295,8 +295,11 @@ later caller. One bad image could stop all thumbnails until restart. The data un
 
 ### Open folder → grid
 
-1. `folder:request` (tree, favorite, path bar, double-click) → `openFolder()` resets the session's
-   place, selection and filter, then `loadFolder()`.
+1. `folder:request` (tree, favorite, path bar, double-click) → `openFolder()` keeps the place of
+   the folder it leaves (top image and selection, in memory, last 200 folders; not while that
+   folder still loads), resets the session's place, selection and filter, then `loadFolder()`.
+   After the load it puts back the saved place of the new folder, if any. Back and Up select the
+   folder you came from and scroll only if it is off screen (`grid.revealIndex`).
 2. `loadFolder` sets `currentFolder`, starts `watch_folder` (before the listing, so no change
    between the two is lost), calls `list_folder`, reads Date Taken only if that sort is active,
    then `setState({ entries: view() })`. Each load and each refresh has a number; after each

@@ -1,7 +1,8 @@
 // Checks for the live folder with the whole viewer running against a folder in memory: new,
 // deleted and edited files show up, an edited photo gets its new thumbnail, a slow old listing
 // never replaces a newer one, coming back to Kadar looks again, and a folder that is gone is
-// left for the nearest folder above it, with a message.
+// left for the nearest folder above it, with a message. Going in and out of a folder keeps its
+// place in the grid.
 
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { FileEntry, FolderListing, ViewerAPI } from './types'
@@ -157,5 +158,98 @@ describe('live folder', () => {
     const { getState } = await import('./store')
     expect(getState().currentFolder).toBe('/p')
     expect(names()).toEqual(['missed.jpg', 'new.jpg'])
+  })
+})
+
+describe('place in the grid', () => {
+  const subfolders = Array.from({ length: 40 }, (_, i) => `/q/f${String(i).padStart(2, '0')}`)
+  const grid = (): HTMLElement => document.querySelector<HTMLElement>('.viewer-grid-scroll')!
+
+  beforeAll(async () => {
+    disk.set('/q', { files: Array.from({ length: 60 }, (_, i) => file('/q', `img${i}.jpg`)), folders: subfolders })
+    for (const f of subfolders) disk.set(f, { files: [file(f, 'z.jpg')], folders: [] })
+    // The test page has no layout: give the grid a real size.
+    Object.defineProperty(grid(), 'clientWidth', { configurable: true, value: 800 })
+    Object.defineProperty(grid(), 'clientHeight', { configurable: true, value: 600 })
+    const { emit } = await import('./bus')
+    emit('folder:request', { path: '/q' })
+    await settle()
+  })
+
+  /** Scrolls the grid as you do: the top row holds folder `n`. Gives the new scroll position and
+   *  the folder one row below `n`, which is on screen but not in the top row. */
+  const scrollTo = async (n: number): Promise<{ top: number; below: string }> => {
+    const { computeLayout, ZOOM_DEFAULT } = await import('./grid/grid-layout')
+    const layout = computeLayout(800, ZOOM_DEFAULT)
+    grid().scrollTop = Math.floor(n / layout.columns) * layout.rowHeight
+    grid().dispatchEvent(new Event('scroll'))
+    await settle()
+    return { top: grid().scrollTop, below: subfolders[n + layout.columns]! }
+  }
+
+  it('back from a subfolder shows the folder where you left it, with that subfolder selected', async () => {
+    const { emit } = await import('./bus')
+    const { getState } = await import('./store')
+    const { top, below } = await scrollTo(28)
+    expect(top).toBeGreaterThan(0)
+    emit('folder:request', { path: below })
+    await settle()
+    expect(getState().currentFolder).toBe(below)
+    emit('folder:go', { to: 'back' })
+    await settle()
+    expect(getState().currentFolder).toBe('/q')
+    expect(grid().scrollTop).toBe(top)
+    expect(getState().selectedPath).toBe(below)
+  })
+
+  it('up from a subfolder and forward again keep each place', async () => {
+    const { emit } = await import('./bus')
+    const { getState } = await import('./store')
+    const { top, below } = await scrollTo(20)
+    emit('folder:request', { path: below })
+    await settle()
+    emit('folder:go', { to: 'up' })
+    await settle()
+    expect(grid().scrollTop).toBe(top)
+    expect(getState().selectedPath).toBe(below)
+    emit('folder:go', { to: 'back' })
+    await settle()
+    expect(getState().currentFolder).toBe(below)
+    emit('folder:go', { to: 'forward' })
+    await settle()
+    expect(getState().currentFolder).toBe('/q')
+    expect(grid().scrollTop).toBe(top)
+  })
+
+  it('a folder opened again from the sidebar comes back where you left it', async () => {
+    const { emit } = await import('./bus')
+    const { getState } = await import('./store')
+    const { top } = await scrollTo(35)
+    emit('folder:request', { path: '/p' })
+    await settle()
+    emit('folder:request', { path: '/q' })
+    await settle()
+    expect(getState().currentFolder).toBe('/q')
+    expect(grid().scrollTop).toBe(top)
+  })
+
+  it('leaving a folder before it loads keeps the place from the visit before', async () => {
+    const { emit } = await import('./bus')
+    const { getState } = await import('./store')
+    const { top } = await scrollTo(26)
+    emit('folder:request', { path: '/p' })
+    await settle()
+    let release!: () => void
+    hold = new Promise((r) => { release = r })
+    emit('folder:request', { path: '/q' }) // slow disk: still loading
+    await settle()
+    emit('folder:request', { path: '/p' })
+    await settle()
+    release()
+    await settle()
+    emit('folder:request', { path: '/q' })
+    await settle()
+    expect(getState().currentFolder).toBe('/q')
+    expect(grid().scrollTop).toBe(top)
   })
 })

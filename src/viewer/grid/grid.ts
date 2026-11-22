@@ -26,6 +26,8 @@ export interface GridHandle {
   setZoom: (targetCell: number) => void
   /** Scrolls so the row with this image is at the top, and keeps it there on resize and zoom. */
   scrollToIndex: (index: number) => void
+  /** Scrolls the least needed to show this image; no scroll when it is already on screen. */
+  revealIndex: (index: number) => void
 }
 
 /** Builds the grid and starts listening to the store, the bus and window keys. Fills itself from the store. */
@@ -425,6 +427,10 @@ export function createGrid(): GridHandle {
     scrollToIndex(index: number) {
       topIndex = Math.max(0, Math.min(index, entries.length - 1))
       scrollToTop()
+      render()
+    },
+    revealIndex(index: number) {
+      ensureVisible(index)
       render()
     },
   }
